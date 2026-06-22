@@ -4,12 +4,14 @@
   "license": "MIT",
   "private": true,
   "scripts": {
+    "dev": "vite",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
   },
   "devDependencies": {
     "prettier": "^3.8.3",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "vite": "^5.0.0"
   }
 }

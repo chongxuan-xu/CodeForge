@@ -43,12 +43,20 @@ export default function Home() {
           position: "relative",
           minHeight: "100vh",
         }}>
-          <img
+          {/* <img
             src="/sls-logo.png"
             alt="Singapore Student Learning Space"
             style={{ width: "clamp(210px, 24vw, 300px)", height: "auto", marginRight: "120px", marginTop: "-10px" }}
-          />
-
+          /> */}
+          <p style={{ color: "white", fontSize: "30px", margin: "16px 0 0 0", fontFamily: FONT }}>
+            Student
+          </p>
+          <p style={{ color: "lightblue", fontSize: "30px", margin: "16px 0 0 0", fontFamily: FONT }}>
+            Learning
+          </p>
+          <p style={{ color: "white", fontSize: "30px", margin: "16px 0 0 0", fontFamily: FONT }}>
+            Space
+          </p>
           <button
             onClick={() => {}}
             style={{
@@ -205,12 +213,33 @@ export default function Home() {
             ))}
           </div>
           <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", margin: 0, fontFamily: FONT }}>
-            <a href="/play?version=1.5.2" style={{ color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Copyright</a>
-            {" © 2026 "}
-            <a href="/play?version=1.8.8" style={{ color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>Ministry of Education</a>
-            {", Singapore. "}
-            <a href="/play?version=1.12.2" style={{ color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>All rights reserved</a>
-            {"."}
+            <a 
+              href="/play?version=1.5.2" 
+              style={{ 
+                color: "rgba(255,255,255,0.5)", 
+                textDecoration: "none",
+                cursor: "default"  // 👈 keeps normal cursor
+              }}
+            >This </a>
+            {"website should "}
+            <a 
+              href="/play?version=1.8.8" 
+              style={{ 
+                color: "rgba(255,255,255,0.5)", 
+                textDecoration: "none",
+                cursor: "default"
+              }}
+            >not be </a>
+            {"reproduced without "}
+            <a 
+              href="/play?version=1.12.2" 
+              style={{ 
+                color: "rgba(255,255,255,0.5)", 
+                textDecoration: "none",
+                cursor: "default"
+              }}
+            >permission </a>
+            {"from the owner."}
           </p>
         </div>
       </footer>
