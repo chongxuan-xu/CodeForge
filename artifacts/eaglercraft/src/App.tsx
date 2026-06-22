@@ -1,27 +1,15 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import Home from "./pages/home";
+import { useState } from "react";
+import VSCode from "./pages/home";
 import Play from "./pages/play";
 
-const queryClient = new QueryClient();
+export type GameVersion = "1.5.2" | "1.8.8" | "1.12.2" | null;
 
-function Router() {
-  return (
-    <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/play" component={Play} />
-    </Switch>
-  );
+export default function App() {
+  const [gameVersion, setGameVersion] = useState<GameVersion>(null);
+
+  if (gameVersion) {
+    return <Play version={gameVersion} onBack={() => setGameVersion(null)} />;
+  }
+
+  return <VSCode onLaunchGame={(v) => setGameVersion(v)} />;
 }
-
-function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-        <Router />
-      </WouterRouter>
-    </QueryClientProvider>
-  );
-}
-
-export default App;
