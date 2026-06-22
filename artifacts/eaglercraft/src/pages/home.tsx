@@ -3,18 +3,83 @@ import type { GameVersion } from "../App";
 
 interface Props { onLaunchGame: (v: GameVersion) => void; }
 
-// ─── VSCode-style file icons ─────────────────────────────────────────────────
-const FILE_ICONS: Record<string, { bg: string; fg: string; label: string }> = {
+// ─── VSCode Material Icon Theme via jsDelivr CDN ────────────────────────────
+const CDN = "https://cdn.jsdelivr.net/gh/PKief/vscode-material-icon-theme@latest/icons/";
+
+const EXT_ICON: Record<string, string> = {
+  ts: "typescript", tsx: "react_ts", js: "javascript", jsx: "react",
+  mjs: "javascript", cjs: "javascript",
+  py: "python", pyc: "python",
+  go: "go2",
+  html: "html", htm: "html",
+  css: "css", scss: "sass", sass: "sass", less: "less",
+  json: "json", jsonc: "json", json5: "json5",
+  md: "markdown", mdx: "markdown",
+  rs: "rust",
+  rb: "ruby", erb: "ruby",
+  java: "java",
+  cpp: "cpp", cc: "cpp", cxx: "cpp", "c++": "cpp",
+  c: "c", h: "h", hpp: "h",
+  sh: "shell", bash: "shell", zsh: "shell", fish: "fish",
+  yaml: "yaml", yml: "yaml",
+  toml: "toml",
+  dockerfile: "docker",
+  vue: "vue", svelte: "svelte",
+  kt: "kotlin", kts: "kotlin",
+  swift: "swift",
+  lua: "lua",
+  r: "r",
+  scala: "scala",
+  hs: "haskell", lhs: "haskell",
+  dart: "dart",
+  nim: "nim",
+  zig: "zig",
+  jl: "julia",
+  groovy: "groovy", gradle: "gradle",
+  php: "php",
+  cs: "csharp",
+  fs: "fsharp", fsx: "fsharp",
+  ml: "ocaml", mli: "ocaml",
+  ex: "elixir", exs: "elixir",
+  erl: "erlang", hrl: "erlang",
+  sql: "database", db: "database",
+  graphql: "graphql", gql: "graphql",
+  prisma: "prisma",
+  proto: "proto",
+  gitignore: "git", gitattributes: "git",
+  txt: "document",
+  log: "log",
+  xml: "xml",
+  svg: "svg",
+  png: "image", jpg: "image", jpeg: "image", gif: "image", webp: "image", ico: "image",
+  pdf: "pdf",
+  csv: "csv",
+  lock: "lock",
+  env: "tune",
+  tf: "terraform", tfvars: "terraform",
+  astro: "astro",
+  elm: "elm",
+  clj: "clojure", cljs: "clojure",
+  ex2: "elixir",
+  v: "v",
+  zig2: "zig",
+  nix: "nix",
+  ps1: "powershell", psm1: "powershell",
+  bat: "bat",
+  sol: "solidity",
+  tex: "tex",
+  vue3: "vue",
+};
+
+const FALLBACK: Record<string, { bg: string; fg: string; label: string }> = {
   ts:   { bg: "#3178c6", fg: "#fff",    label: "TS"   },
   tsx:  { bg: "#61dafb", fg: "#0a2540", label: "TSX"  },
   js:   { bg: "#f7df1e", fg: "#1a1a1a", label: "JS"   },
   jsx:  { bg: "#61dafb", fg: "#0a2540", label: "JSX"  },
-  mjs:  { bg: "#f7df1e", fg: "#1a1a1a", label: "MJS"  },
   py:   { bg: "#3572A5", fg: "#fff",    label: "PY"   },
   go:   { bg: "#00add8", fg: "#fff",    label: "GO"   },
   html: { bg: "#e34c26", fg: "#fff",    label: "HTML" },
   css:  { bg: "#264de4", fg: "#fff",    label: "CSS"  },
-  scss: { bg: "#c69",    fg: "#fff",    label: "SCSS" },
   json: { bg: "#cbcb41", fg: "#1a1a1a", label: "JSON" },
   md:   { bg: "#519aba", fg: "#fff",    label: "MD"   },
   rs:   { bg: "#dea584", fg: "#1a1a1a", label: "RS"   },
@@ -24,35 +89,42 @@ const FILE_ICONS: Record<string, { bg: string; fg: string; label: string }> = {
   c:    { bg: "#a8b9cc", fg: "#1a1a1a", label: "C"    },
   sh:   { bg: "#4eaa25", fg: "#fff",    label: "SH"   },
   yaml: { bg: "#cc1018", fg: "#fff",    label: "YML"  },
-  yml:  { bg: "#cc1018", fg: "#fff",    label: "YML"  },
-  toml: { bg: "#9c4221", fg: "#fff",    label: "TOML" },
   git:  { bg: "#f14e32", fg: "#fff",    label: "GIT"  },
-  txt:  { bg: "#6d8086", fg: "#fff",    label: "TXT"  },
-  svg:  { bg: "#e8b455", fg: "#1a1a1a", label: "SVG"  },
-  png:  { bg: "#a074c4", fg: "#fff",    label: "PNG"  },
-  jpg:  { bg: "#a074c4", fg: "#fff",    label: "JPG"  },
-  env:  { bg: "#4eaa25", fg: "#fff",    label: ".ENV" },
-  sql:  { bg: "#e38d00", fg: "#fff",    label: "SQL"  },
-  vue:  { bg: "#42b883", fg: "#fff",    label: "VUE"  },
-  svelte: { bg: "#ff3e00", fg: "#fff",  label: "SV"   },
-  kt:   { bg: "#7f52ff", fg: "#fff",    label: "KT"   },
-  swift: { bg: "#fa7343", fg: "#fff",   label: "SW"   },
-  r:    { bg: "#276dc3", fg: "#fff",    label: "R"    },
-  lua:  { bg: "#000080", fg: "#fff",    label: "LUA"  },
-  dockerfile: { bg: "#2496ed", fg: "#fff", label: "DOCK" },
 };
 
 function FileIcon({ name, ext }: { name: string; ext?: string }) {
-  const key = (name.startsWith(".git") || name === ".gitignore") ? "git"
+  const [failed, setFailed] = useState(false);
+  const key = (name.startsWith(".git")) ? "gitignore"
     : (ext ?? name.split(".").pop() ?? "").toLowerCase();
-  const ic = FILE_ICONS[key] ?? { bg: "#6d8086", fg: "#fff", label: (key.slice(0,4).toUpperCase() || "FILE") };
+  const iconName = EXT_ICON[key];
+  if (iconName && !failed) {
+    return (
+      <img src={`${CDN}${iconName}.svg`} width="16" height="16" alt={key}
+        onError={() => setFailed(true)}
+        style={{ flexShrink: 0, display: "block", minWidth: "16px" }} />
+    );
+  }
+  const ic = FALLBACK[key] ?? { bg: "#6d8086", fg: "#fff", label: key.slice(0,4).toUpperCase() || "FILE" };
   return (
-    <span style={{
-      display: "inline-flex", alignItems: "center", justifyContent: "center",
-      width: "22px", height: "15px", background: ic.bg, color: ic.fg,
-      fontSize: "6px", fontWeight: "bold", borderRadius: "2px",
-      flexShrink: 0, letterSpacing: "0.2px", fontFamily: "'Consolas','monospace'",
-    }}>{ic.label}</span>
+    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "16px", height: "16px", background: ic.bg, color: ic.fg, fontSize: "5.5px", fontWeight: "bold", borderRadius: "2px", flexShrink: 0, fontFamily: "monospace" }}>
+      {ic.label}
+    </span>
+  );
+}
+
+function FolderIcon({ open }: { open: boolean }) {
+  const [failed, setFailed] = useState(false);
+  if (!failed) {
+    return (
+      <img src={`${CDN}${open ? "folder-open" : "folder"}.svg`} width="16" height="16" alt="folder"
+        onError={() => setFailed(true)}
+        style={{ flexShrink: 0, display: "block", minWidth: "16px" }} />
+    );
+  }
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill={open ? "#e8bf6a" : "#dcb67a"}/>
+    </svg>
   );
 }
 
@@ -128,20 +200,7 @@ interface FileEntry {
   parentId: string | null; depth: number; lang?: string; ext?: string;
 }
 
-const ROOT_FILES: FileEntry[] = [
-  { id: "root",        name: "my-project", isFolder: true,  parentId: null,   depth: 0 },
-  { id: "src",         name: "src",        isFolder: true,  parentId: "root", depth: 1 },
-  { id: "index.ts",    name: "index.ts",   parentId: "src", depth: 2, lang: "typescript",      ext: "ts"   },
-  { id: "App.tsx",     name: "App.tsx",    parentId: "src", depth: 2, lang: "typescriptreact", ext: "tsx"  },
-  { id: "styles.css",  name: "styles.css", parentId: "src", depth: 2, lang: "css",             ext: "css"  },
-  { id: "utils.py",    name: "utils.py",   parentId: "src", depth: 2, lang: "python",          ext: "py"   },
-  { id: "server.go",   name: "server.go",  parentId: "src", depth: 2, lang: "go",              ext: "go"   },
-  { id: "public",      name: "public",     isFolder: true,  parentId: "root", depth: 1 },
-  { id: "index.html",  name: "index.html", parentId: "public", depth: 2, lang: "html",         ext: "html" },
-  { id: "package.json",name: "package.json",parentId:"root",depth: 1, lang: "json",            ext: "json" },
-  { id: "README.md",   name: "README.md",  parentId: "root",depth: 1, lang: "markdown",        ext: "md"   },
-  { id: ".gitignore",  name: ".gitignore", parentId: "root",depth: 1, lang: "plaintext",       ext: "git"  },
-];
+const ROOT_FILES: FileEntry[] = [];
 
 const LANGUAGES = [
   "ABAP","ActionScript","Ada","Apex","APL","AppleScript","Arduino","Assembly","Astro",
@@ -534,7 +593,7 @@ export default function VSCode({ onLaunchGame }: Props) {
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({ root: true, src: true });
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [activeActivity, setActiveActivity] = useState<"explorer"|"search"|"git"|"debug"|"extensions">("explorer");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [terminalOpen, setTerminalOpen] = useState(true);
@@ -879,7 +938,7 @@ export default function VSCode({ onLaunchGame }: Props) {
                     >
                       {f.isFolder
                         ? <><span style={{ width: "12px", flexShrink: 0 }}>{expanded[f.id] ? <SvgChevD /> : <SvgChevR />}</span>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill={expanded[f.id]?"#e8bf6a":"#dcb67a"}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill={expanded[f.id]?"#e8bf6a":"#dcb67a"}/></svg></>
+                            <FolderIcon open={!!expanded[f.id]} /></>
                         : <><span style={{ width: "12px", flexShrink: 0 }} /><FileIcon name={f.name} ext={f.ext} /></>}
                       <span style={{ fontSize: "13px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
                     </div>
