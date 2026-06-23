@@ -395,11 +395,30 @@ build/
 
 // ─── Syntax Highlighter ──────────────────────────────────────────────────────
 const KEYWORDS: Record<string, string[]> = {
-  typescript: ["interface","type","const","let","var","function","async","await","return","if","else","for","while","class","extends","implements","import","export","from","default","new","throw","try","catch","finally","in","of","typeof","instanceof","void","null","undefined","true","false","number","string","boolean","any","never","readonly","enum","namespace","declare","abstract"],
-  typescriptreact: ["interface","type","const","let","var","function","async","await","return","if","else","for","while","class","extends","import","export","from","default","new","throw","try","catch","in","of","typeof","void","null","undefined","true","false","React","useState","useEffect","useRef","useCallback","useMemo","useContext","JSX"],
-  python: ["def","class","import","from","return","if","elif","else","for","while","with","as","try","except","finally","raise","and","or","not","in","is","True","False","None","lambda","yield","pass","break","continue","global","nonlocal","print","len","range","type","str","int","float","list","dict","tuple","set","bool","self"],
-  go: ["func","package","import","var","const","type","struct","interface","return","if","else","for","range","switch","case","default","go","chan","select","defer","make","new","len","cap","append","copy","map","true","false","nil","string","int","int64","float64","bool","error","fmt","byte","rune"],
+  typescript: ["interface","type","const","let","var","function","async","await","return","if","else","for","while","do","class","extends","implements","import","export","from","default","new","throw","try","catch","finally","in","of","typeof","instanceof","void","null","undefined","true","false","number","string","boolean","any","never","never","readonly","enum","namespace","declare","abstract","switch","case","break","continue","delete","this","super","static","get","set","keyof","infer","satisfies"],
+  typescriptreact: ["interface","type","const","let","var","function","async","await","return","if","else","for","while","do","class","extends","implements","import","export","from","default","new","throw","try","catch","finally","in","of","typeof","instanceof","void","null","undefined","true","false","React","useState","useEffect","useRef","useCallback","useMemo","useContext","useReducer","useLayoutEffect","JSX","switch","case","break","continue","abstract","readonly","enum","keyof"],
+  javascript: ["const","let","var","function","async","await","return","if","else","for","while","do","class","extends","import","export","from","default","new","throw","try","catch","finally","in","of","typeof","instanceof","void","null","undefined","true","false","switch","case","break","continue","delete","yield","this","super","static","get","set","with","debugger","prototype"],
+  javascriptreact: ["const","let","var","function","async","await","return","if","else","for","while","do","class","extends","import","export","from","default","new","throw","try","catch","finally","in","of","typeof","instanceof","void","null","undefined","true","false","switch","case","break","continue","delete","yield","this","super","static","React","useState","useEffect","useRef","useCallback","useMemo","useContext"],
+  python: ["def","class","import","from","return","if","elif","else","for","while","with","as","try","except","finally","raise","and","or","not","in","is","True","False","None","lambda","yield","pass","break","continue","global","nonlocal","async","await","print","len","range","type","str","int","float","list","dict","tuple","set","bool","self","super","object","property","classmethod","staticmethod","__init__","__str__","__repr__","__len__","__main__"],
+  go: ["func","package","import","var","const","type","struct","interface","return","if","else","for","range","switch","case","default","go","chan","select","defer","make","new","len","cap","append","copy","delete","map","true","false","nil","string","int","int8","int16","int32","int64","uint","uint8","uint16","uint32","uint64","float32","float64","complex64","complex128","bool","byte","rune","uintptr","error","fmt","os","io","log","sync","context","http","json"],
+  rust: ["fn","let","mut","const","static","struct","enum","impl","trait","use","mod","pub","priv","super","self","Self","crate","return","if","else","for","while","loop","match","break","continue","where","type","as","in","ref","extern","unsafe","async","await","move","dyn","Box","Option","Result","Some","None","Ok","Err","Vec","String","str","i8","i16","i32","i64","i128","u8","u16","u32","u64","u128","f32","f64","bool","char","usize","isize","println","eprintln","panic","unwrap","expect","Clone","Copy","Debug","Default","Display","Iterator","Into","From","Send","Sync"],
+  java: ["public","private","protected","static","final","class","interface","enum","extends","implements","return","if","else","for","while","do","try","catch","finally","throw","throws","new","import","package","void","int","long","short","byte","double","float","boolean","char","String","Object","null","true","false","this","super","switch","case","break","continue","default","abstract","synchronized","volatile","transient","native","instanceof","strictfp","System","out","println","ArrayList","HashMap","List","Map","Set","Optional","Stream","override","annotation"],
+  c: ["int","long","short","char","double","float","void","unsigned","signed","const","static","extern","register","volatile","auto","restrict","inline","if","else","for","while","do","switch","case","break","continue","return","goto","struct","union","enum","typedef","sizeof","NULL","true","false","include","define","ifdef","ifndef","endif","elif","undef","pragma","error","warning","printf","scanf","malloc","free","calloc","realloc","memcpy","memset","strlen","strcmp","strcpy","fprintf","stderr","stdin","stdout","FILE"],
+  cpp: ["int","long","short","char","double","float","void","unsigned","signed","const","static","extern","register","volatile","auto","inline","if","else","for","while","do","switch","case","break","continue","return","goto","struct","union","enum","typedef","sizeof","nullptr","NULL","true","false","class","public","private","protected","virtual","override","final","new","delete","template","typename","namespace","using","friend","operator","mutable","constexpr","decltype","explicit","this","static_cast","dynamic_cast","reinterpret_cast","const_cast","std","cout","cin","cerr","endl","vector","string","map","set","pair","unique_ptr","shared_ptr","make_unique","make_shared","include","define"],
+  ruby: ["def","end","class","module","require","require_relative","include","extend","prepend","attr_reader","attr_writer","attr_accessor","return","if","elsif","else","unless","case","when","while","until","for","do","begin","rescue","ensure","raise","retry","yield","self","super","true","false","nil","and","or","not","then","in","puts","print","p","pp","lambda","proc","block","new","initialize","each","map","select","reject","reduce","inject","find","any","all","none","count","first","last","flatten","compact","uniq","sort","reverse","freeze","frozen","dup","clone","tap","then","itself"],
+  php: ["echo","print","var_dump","var_export","function","class","interface","trait","extends","implements","abstract","final","return","if","elseif","else","foreach","for","while","do","switch","case","break","continue","try","catch","finally","throw","new","namespace","use","public","private","protected","static","null","true","false","array","string","int","float","bool","void","mixed","self","parent","this","require","include","require_once","include_once","isset","unset","empty","list","match","readonly","enum","fn","arrow","yield","from","instanceof","and","or","xor","print_r","sprintf","printf","strlen","strpos","str_replace","array_map","array_filter","array_push","array_pop","count","implode","explode"],
+  bash: ["if","then","else","elif","fi","for","do","done","while","until","case","esac","in","select","function","return","exit","break","continue","local","readonly","declare","typeset","export","unset","shift","true","false","echo","printf","read","source","alias","unalias","set","unset","test","let","expr","eval","exec","trap","wait","jobs","bg","fg","kill","sleep","pwd","cd","ls","mkdir","rmdir","rm","cp","mv","cat","grep","sed","awk","cut","sort","uniq","wc","find","xargs","head","tail","diff","chmod","chown","chgrp","curl","wget","ssh","scp","tar","gzip","gunzip","zip","unzip"],
+  kotlin: ["fun","val","var","class","object","data","sealed","abstract","open","override","companion","interface","enum","annotation","inline","infix","operator","tailrec","external","if","else","when","for","while","do","return","null","true","false","is","!is","in","!in","as","as?","by","it","this","super","constructor","init","package","import","public","private","protected","internal","suspend","coroutine","launch","async","withContext","runBlocking","flow","collect","emit","delay","let","run","also","apply","with","takeIf","takeUnless","repeat","listOf","mutableListOf","mapOf","mutableMapOf","setOf","mutableSetOf","arrayOf","sequenceOf","String","Int","Long","Float","Double","Boolean","Char","Unit","Any","Nothing","Number","Pair","Triple","List","Map","Set","Array"],
+  swift: ["func","var","let","class","struct","enum","protocol","extension","actor","import","return","if","else","guard","for","while","repeat","switch","case","break","continue","default","throw","throws","rethrows","try","catch","init","deinit","self","Self","super","true","false","nil","in","is","as","as?","as!","new","weak","unowned","static","final","override","public","private","internal","fileprivate","open","lazy","mutating","nonmutating","get","set","willSet","didSet","typealias","associatedtype","where","some","any","@escaping","@autoclosure","@objc","@available","@discardableResult","String","Int","Double","Float","Bool","Character","Array","Dictionary","Set","Optional","Result","Error","print","fatalError","precondition","assert","defer","async","await","Task","MainActor"],
+  dart: ["void","var","final","const","late","required","class","extends","implements","mixin","abstract","sealed","interface","base","return","if","else","for","while","do","switch","case","break","continue","default","try","catch","on","finally","throw","rethrow","new","import","export","part","of","library","as","show","hide","async","await","yield","sync","true","false","null","this","super","static","factory","get","set","typedef","covariant","dynamic","external","is","as","in","String","int","double","bool","num","List","Map","Set","Future","Stream","Iterable","Object","Enum","Symbol","Never","print","debugPrint"],
+  lua: ["and","break","do","else","elseif","end","false","for","function","goto","if","in","local","nil","not","or","repeat","return","then","true","until","while","print","require","type","pairs","ipairs","next","select","tostring","tonumber","rawget","rawset","rawequal","rawlen","pcall","xpcall","error","assert","load","dofile","loadfile","loadstring","collectgarbage","coroutine","table","string","math","io","os","debug","utf8","package","io.read","io.write","table.insert","table.remove","table.concat","string.format","string.find","string.match","math.floor","math.ceil","math.random"],
+  sql: ["SELECT","FROM","WHERE","JOIN","INNER","LEFT","RIGHT","FULL","CROSS","OUTER","ON","AS","AND","OR","NOT","NULL","IS","IN","LIKE","ILIKE","BETWEEN","ORDER","BY","GROUP","HAVING","LIMIT","OFFSET","UNION","ALL","DISTINCT","INSERT","INTO","VALUES","UPDATE","SET","DELETE","CREATE","TABLE","DROP","ALTER","ADD","COLUMN","INDEX","PRIMARY","KEY","FOREIGN","REFERENCES","UNIQUE","DEFAULT","CONSTRAINT","CHECK","VIEW","MATERIALIZED","TRIGGER","PROCEDURE","FUNCTION","RETURNS","LANGUAGE","BEGIN","END","COMMIT","ROLLBACK","TRANSACTION","SAVEPOINT","RELEASE","IF","EXISTS","CASE","WHEN","THEN","ELSE","COALESCE","NULLIF","CAST","COUNT","SUM","AVG","MIN","MAX","ROUND","FLOOR","CEIL","NOW","CURRENT_DATE","CURRENT_TIME","EXTRACT","DATE_TRUNC","CONCAT","UPPER","LOWER","TRIM","LENGTH","SUBSTRING","REPLACE","ROW_NUMBER","RANK","DENSE_RANK","OVER","PARTITION","WITH","RECURSIVE","EXPLAIN","ANALYZE","VACUUM"],
+  scala: ["def","val","var","class","object","trait","case","abstract","sealed","final","override","extends","with","import","package","type","if","else","for","while","do","return","null","true","false","new","this","super","match","yield","lazy","implicit","given","using","inline","opaque","erased","extension","derives","enum","then","try","catch","finally","throw","while","until","to","by","String","Int","Long","Float","Double","Boolean","Char","Unit","Any","Nothing","AnyRef","AnyVal","Byte","Short","BigInt","BigDecimal","List","Vector","Array","Map","Set","Option","Some","None","Either","Left","Right","Try","Success","Failure","Future","Seq","IndexedSeq","Iterable","Iterator","Tuple"],
+  haskell: ["where","let","in","do","if","then","else","case","of","data","type","newtype","class","instance","module","import","qualified","as","hiding","deriving","forall","exists","infixl","infixr","infix","foreign","return","show","read","map","filter","foldr","foldl","foldl1","foldr1","head","tail","last","init","null","length","take","drop","zip","unzip","zipWith","lines","words","unlines","unwords","Just","Nothing","Left","Right","IO","String","Int","Integer","Double","Float","Bool","Char","Maybe","Either","Ordering","EQ","LT","GT","True","False","otherwise","undefined","error","seq","id","const","flip","curry","uncurry","fst","snd","putStrLn","putStr","getLine","print","interact","readFile","writeFile"],
+  elixir: ["def","defp","defmodule","defprotocol","defimpl","defmacro","defmacrop","defstruct","defexception","defguard","defguardp","defdelegate","do","end","fn","if","unless","cond","case","receive","send","try","catch","rescue","after","for","with","when","and","or","not","in","true","false","nil","is_nil","is_atom","is_binary","is_boolean","is_float","is_integer","is_list","is_map","is_number","is_pid","is_port","is_reference","is_tuple","IO","Enum","List","Map","String","Keyword","Agent","Task","GenServer","Supervisor","Application","Process","Node","System","File","Path","Logger","Jason","Plug","Phoenix"],
+  r: ["if","else","for","while","repeat","function","return","next","break","in","TRUE","FALSE","NULL","NA","NA_integer_","NA_real_","NA_complex_","NA_character_","Inf","NaN","LETTERS","letters","pi","T","F","library","require","source","print","cat","message","warning","stop","paste","paste0","sprintf","format","c","list","vector","matrix","data.frame","data.table","tibble","array","factor","table","read.csv","write.csv","readLines","writeLines","apply","lapply","sapply","vapply","tapply","mapply","Map","Reduce","Filter","which","subset","merge","aggregate","sum","mean","median","sd","var","min","max","range","length","nrow","ncol","dim","str","summary","head","tail","rbind","cbind","ggplot","aes","geom_point","geom_line","geom_bar","dplyr","tidyr","ggplot2","magrittr"],
   css: [],
+  scss: [],
   html: [],
   json: [],
   markdown: [],
@@ -434,11 +453,62 @@ function highlight(code: string, lang: string): string {
       .replace(/\b(\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|deg|s|ms)?)\b/g, '<span style="color:#b5cea8">$1</span>');
   }
   if (lang === "html") {
-    return esc(code)
-      .replace(/(<!--[\s\S]*?-->)/g, '<span style="color:#6a9955">$1</span>')
-      .replace(/(&lt;\/?)([\w-]+)/g, '$1<span style="color:#569cd6">$2</span>')
-      .replace(/([\w-]+)=/g, '<span style="color:#9cdcfe">$1</span>=')
-      .replace(/=("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, '=<span style="color:#ce9178">$1</span>');
+    let out = "";
+    let i = 0;
+
+    while (i < code.length) {
+      if (code.startsWith("<!--", i)) {
+        const end = code.indexOf("-->", i + 4);
+        const part = end === -1 ? code.slice(i) : code.slice(i, end + 3);
+        out += `<span style="color:#6a9955">${esc(part)}</span>`;
+        i += part.length;
+        continue;
+      }
+
+      if (code[i] === "<") {
+        const end = code.indexOf(">", i + 1);
+
+        if (end === -1) {
+          out += esc(code.slice(i));
+          break;
+        }
+
+        const tagText = code.slice(i, end + 1);
+        const match = tagText.match(/^<\/?([a-zA-Z][\w-]*)/);
+
+        if (!match) {
+          out += esc(tagText);
+          i = end + 1;
+          continue;
+        }
+
+        let colored = esc(tagText);
+
+        colored = colored.replace(
+          /^(&lt;\/?)([a-zA-Z][\w-]*)/,
+          `$1<span style="color:#569cd6">$2</span>`,
+        );
+
+        colored = colored.replace(
+          /\s([a-zA-Z_:][-a-zA-Z0-9_:.]*)(=)/g,
+          ` <span style="color:#9cdcfe">$1</span>$2`,
+        );
+
+        colored = colored.replace(
+          /=(&quot;[^&]*&quot;|'[^']*')/g,
+          `=<span style="color:#ce9178">$1</span>`,
+        );
+
+        out += colored;
+        i = end + 1;
+        continue;
+      }
+
+      out += esc(code[i]);
+      i++;
+    }
+
+    return out;
   }
 
   const kws = KEYWORDS[lang] ?? [];
@@ -446,8 +516,24 @@ function highlight(code: string, lang: string): string {
   let i = 0;
   while (i < code.length) {
     const ch = code[i];
+    // Lua / SQL / Haskell double-dash comment
+    if (ch === "-" && code[i+1] === "-" && ["lua","sql","haskell"].includes(lang)) {
+      const end = code.indexOf("\n", i);
+      const line = end === -1 ? code.slice(i) : code.slice(i, end);
+      result += `<span style="color:#6a9955">${esc(line)}</span>`;
+      i = end === -1 ? code.length : end;
+      continue;
+    }
+    // Hash-style line comment
+    if (ch === "#" && ["python","ruby","bash","r","elixir","perl","coffeescript"].includes(lang)) {
+      const end = code.indexOf("\n", i);
+      const line = end === -1 ? code.slice(i) : code.slice(i, end);
+      result += `<span style="color:#6a9955">${esc(line)}</span>`;
+      i = end === -1 ? code.length : end;
+      continue;
+    }
     // Line comment
-    if ((ch === "/" && code[i+1] === "/") || (lang === "python" && ch === "#")) {
+    if (ch === "/" && code[i+1] === "/") {
       const end = code.indexOf("\n", i);
       const line = end === -1 ? code.slice(i) : code.slice(i, end);
       result += `<span style="color:#6a9955">${esc(line)}</span>`;
@@ -515,60 +601,129 @@ function highlight(code: string, lang: string): string {
 // ─── Terminal ────────────────────────────────────────────────────────────────
 let CWD = "~";
 
-function runCmd(input: string, files: FileEntry[], fileContents: Record<string, string>): string {
-  const parts = input.trim().split(/\s+/);
-  const cmd = parts[0]; const args = parts.slice(1);
-  switch (cmd) {
-    case "": return "";
-    case "clear": return "\x00CLEAR";
-    case "help": return ["ls, pwd, cd, echo, cat, mkdir, touch, rm, date, whoami,","node, python, go, npm, git, clear, history"].join("\n");
-    case "ls": return [...files.filter(f=>f.isFolder&&f.name!=="my-project").map(f=>f.name+"/"), ...files.filter(f=>!f.isFolder).map(f=>f.name)].join("  ") || "(empty)";
-    case "pwd": return CWD === "~" ? "/home/codeforge" : `/home/codeforge/${CWD.replace("~/","").replace("~","")}`;
-    case "cd":
-      if (!args[0]||args[0]==="~") { CWD="~"; return ""; }
-      if (args[0]==="..") { const p=CWD.split("/"); p.pop(); CWD=p.join("/")||"~"; return ""; }
-      CWD=CWD==="~"?`~/${args[0]}`:`${CWD}/${args[0]}`; return "";
-    case "echo": return args.join(" ");
-    case "cat": {
-      if (!args[0]) return "cat: missing file operand";
-      const content = fileContents[args[0]] ?? STARTER[args[0]];
-      return content ?? `cat: ${args[0]}: No such file or directory`;
+async function runCmd(
+  input: string,
+  files: FileEntry[],
+  fileContents: Record<string, string>,
+  activeTab: string | null,
+): Promise<string> {
+  const parts = input.trim().split(/\s+/).filter(Boolean);
+  const cmd = parts[0] ?? "";
+  const args = parts.slice(1);
+
+  const findFile = (name?: string) => {
+    if (!name) {
+      return activeTab
+        ? files.find(f => f.id === activeTab && !f.isFolder) ?? null
+        : null;
     }
-    case "mkdir": return args[0] ? "" : "mkdir: missing operand";
-    case "touch": return args[0] ? "" : "touch: missing file operand";
-    case "rm": return args[0] ? `removed '${args[0]}'` : "rm: missing operand";
-    case "date": return new Date().toString();
-    case "whoami": return "codeforge";
-    case "hostname": return "workspace";
-    case "uname": return args[0]==="-a" ? "Linux workspace 6.1.0 #1 SMP x86_64 GNU/Linux" : "Linux";
-    case "history": return ["1  git status","2  npm install","3  npm run dev","4  ls"].join("\n");
-    case "node": case "ts-node": case "tsx":
-      return args[0] ? `[Running ${args[0]}...]\nHello, World!\nProcess exited with code 0` : `${cmd}: missing script`;
-    case "python": case "python3":
-      return args[0] ? `[Running ${args[0]}...]\nProcess exited with code 0` : `${cmd}: missing script`;
+
+    return files.find(f => !f.isFolder && (f.name === name || f.id === name)) ?? null;
+  };
+
+  const runFile = async (name?: string, forcedLang?: string) => {
+    const f = findFile(name);
+
+    if (!f) {
+      return name ? `${name}: No such file` : "No active file to run.";
+    }
+
+    const code =
+      fileContents[f.id] ??
+      fileContents[f.name] ??
+      "";
+
+    if (!code.trim()) {
+      return `${f.name} is empty. The editor did not save the code.`;
+    }
+
+    const language = forcedLang ?? languageFromFileName(f.name);
+
+    if (["html", "css", "json", "markdown", "plaintext"].includes(language)) {
+      return `${f.name} is not a runnable program file.`;
+    }
+
+    return await executeOnline({
+      language,
+      filename: f.name,
+      code,
+    });
+  };
+
+  switch (cmd) {
+    case "":
+      return "";
+
+    case "clear":
+      return "\x00CLEAR";
+
+    case "help":
+      return [
+        "Run examples:",
+        "python main.py",
+        "python3 main.py",
+        "node main.js",
+        "tsx main.ts",
+        "gcc main.c",
+        "g++ main.cpp",
+        "java Main.java",
+        "go run main.go",
+        "rustc main.rs",
+        "run",
+      ].join("\n");
+
+    case "ls":
+      return [
+        ...files.filter(f => f.isFolder).map(f => f.name + "/"),
+        ...files.filter(f => !f.isFolder).map(f => f.name),
+      ].join("  ") || "(empty)";
+
+    case "cat": {
+      const f = findFile(args[0]);
+      if (!f) return `cat: ${args[0] ?? ""}: No such file`;
+      return fileContents[f.id] ?? fileContents[f.name] ?? "";
+    }
+
+    case "run":
+      return await runFile(args[0]);
+
+    case "python":
+    case "python3":
+      return await runFile(args[0], "python");
+
+    case "node":
+      return await runFile(args[0], "javascript");
+
+    case "tsx":
+    case "ts-node":
+      return await runFile(args[0], "typescript");
+
+    case "gcc":
+      return await runFile(args.find(a => a.endsWith(".c")), "c");
+
+    case "g++":
+    case "clang++":
+      return await runFile(args.find(a => /\.(cpp|cc|cxx)$/.test(a)), "cpp");
+
+    case "java":
+      return await runFile(args[0], "java");
+
     case "go":
-      if (args[0]==="run"&&args[1]) return `[Running ${args[1]}...]\nServer running on :8080`;
-      if (args[0]==="build") return "Build complete.";
-      if (args[0]==="test") return `ok\tmy-project\t0.423s`;
-      return `go: unknown subcommand '${args[0]??""}'`;
-    case "npm": case "pnpm": case "yarn": case "bun":
-      if (args[0]==="install"||args[0]==="i") return `\nadded 248 packages in 3.2s`;
-      if (args[0]==="run") return `\n> ${args[1]}\n\n  VITE v5.0.0  ready in 412ms\n  ➜  Local:   http://localhost:5173/`;
-      if (args[0]==="test") return `\n✓ 20 tests passed (2.1s)`;
-      if (args[0]==="build") return `\n✓ built in 1.42s`;
-      return `${cmd}: unknown command '${args[0]??""}'`;
-    case "git":
-      if (args[0]==="status") return "On branch main\nnothing to commit, working tree clean";
-      if (args[0]==="log") return `commit a1b2c3d (HEAD -> main)\nAuthor: codeforge <cf@workspace>\nDate:   ${new Date().toDateString()}\n\n    feat: initial commit`;
-      if (args[0]==="init") return `Initialized empty Git repository in ${CWD}/.git/`;
-      if (args[0]==="add") return "";
-      if (args[0]==="commit") return `[main a1b2c3d] ${args.slice(2).join(" ")||"update"}`;
-      if (args[0]==="push") return `To github.com:user/repo.git\n   a1b2c3d..f4e5d6c  main -> main`;
-      if (args[0]==="pull") return `Already up to date.`;
-      if (args[0]==="branch") return `* main\n  develop`;
-      return `git: '${args[0]}' is not a git command`;
+      return args[0] === "run"
+        ? await runFile(args[1], "go")
+        : "Use: go run main.go";
+
+    case "rustc":
+      return await runFile(args[0], "rust");
+
+    case "ruby":
+      return await runFile(args[0], "ruby");
+
+    case "php":
+      return await runFile(args[0], "php");
+
     default:
-      return `${cmd}: command not found. Type 'help' for available commands`;
+      return `${cmd}: command not found`;
   }
 }
 
@@ -586,10 +741,121 @@ const ALL_EXTENSIONS = [
   { id: "indent",    name: "indent-rainbow",              desc: "Colorize indentation",     author: "oderwat" },
 ];
 
+type RunRequest = {
+  language: string;
+  code: string;
+  filename: string;
+};
+
+function languageFromFileName(name: string): string {
+  const lower = name.toLowerCase();
+
+  if (lower.endsWith(".py")) return "python";
+  if (lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".cjs")) return "javascript";
+  if (lower.endsWith(".ts")) return "typescript";
+  if (lower.endsWith(".tsx")) return "typescriptreact";
+  if (lower.endsWith(".jsx")) return "javascriptreact";
+  if (lower.endsWith(".cpp") || lower.endsWith(".cc") || lower.endsWith(".cxx")) return "cpp";
+  if (lower.endsWith(".c")) return "c";
+  if (lower.endsWith(".java")) return "java";
+  if (lower.endsWith(".go")) return "go";
+  if (lower.endsWith(".rs")) return "rust";
+  if (lower.endsWith(".rb")) return "ruby";
+  if (lower.endsWith(".php")) return "php";
+  if (lower.endsWith(".cs")) return "csharp";
+  if (lower.endsWith(".html") || lower.endsWith(".htm")) return "html";
+  if (lower.endsWith(".css")) return "css";
+  if (lower.endsWith(".json")) return "json";
+  if (lower.endsWith(".md")) return "markdown";
+
+  return "plaintext";
+}
+
+const PISTON_LANG: Record<string, { language: string; version: string }> = {
+  python:          { language: "python",     version: "3.*"  },
+  javascript:      { language: "javascript", version: "18.*" },
+  javascriptreact: { language: "javascript", version: "18.*" },
+  typescript:      { language: "typescript", version: "5.*"  },
+  typescriptreact: { language: "typescript", version: "5.*"  },
+  go:              { language: "go",         version: "1.*"  },
+  rust:            { language: "rust",       version: "1.*"  },
+  java:            { language: "java",       version: "15.*" },
+  c:               { language: "c",          version: "10.*" },
+  cpp:             { language: "c++",        version: "10.*" },
+  ruby:            { language: "ruby",       version: "3.*"  },
+  php:             { language: "php",        version: "8.*"  },
+  kotlin:          { language: "kotlin",     version: "1.*"  },
+  swift:           { language: "swift",      version: "5.*"  },
+  lua:             { language: "lua",        version: "5.*"  },
+  bash:            { language: "bash",       version: "5.*"  },
+  r:               { language: "r",          version: "4.*"  },
+  dart:            { language: "dart",       version: "2.*"  },
+  scala:           { language: "scala",      version: "3.*"  },
+  csharp:          { language: "csharp",     version: "6.*"  },
+  fsharp:          { language: "fsharp",     version: "5.*"  },
+  haskell:         { language: "haskell",    version: "9.*"  },
+  elixir:          { language: "elixir",     version: "1.*"  },
+  perl:            { language: "perl",       version: "5.*"  },
+  julia:           { language: "julia",      version: "1.*"  },
+  nim:             { language: "nim",        version: "1.*"  },
+  zig:             { language: "zig",        version: "0.*"  },
+};
+
+async function executeOnline(req: RunRequest): Promise<string> {
+  const spec = PISTON_LANG[req.language.toLowerCase()];
+  if (!spec) {
+    return `'${req.language}' is not a supported execution language.\nSupported: python, javascript, typescript, go, rust, java, c, c++, ruby, php, kotlin, swift, lua, bash, r, dart, scala, and more.`;
+  }
+  try {
+    const res = await fetch("https://emkc.org/api/v2/piston/execute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        language: spec.language,
+        version: spec.version,
+        files: [{ name: req.filename, content: req.code }],
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      return `Piston API error ${res.status}: ${text.slice(0, 300)}`;
+    }
+    const data = await res.json() as {
+      compile?: { code: number; output: string; stderr: string };
+      run?: { code: number; output: string; stderr: string; signal: string | null };
+      message?: string;
+    };
+    if (data.message) return `Error: ${data.message}`;
+    if (data.compile && data.compile.code !== 0) {
+      const out = (data.compile.stderr || data.compile.output || "Compilation failed").trim();
+      return out;
+    }
+    const run = data.run;
+    if (!run) return "No output.";
+    const output = run.output?.trim() || run.stderr?.trim() || "";
+    if (!output) {
+      return run.signal
+        ? `Process killed by signal: ${run.signal}`
+        : run.code === 0
+          ? "Process exited with code 0"
+          : `Process exited with code ${run.code}`;
+    }
+    return output;
+  } catch (err) {
+    return `Network error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function VSCode({ onLaunchGame }: Props) {
   const [files, setFiles] = useState<FileEntry[]>(ROOT_FILES);
   const [fileContents, setFileContents] = useState<Record<string, string>>(STARTER);
+
+  const fileContentsRef = useRef<Record<string, string>>(STARTER);
+
+  useEffect(() => {
+    fileContentsRef.current = fileContents;
+  }, [fileContents]);
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -739,25 +1005,62 @@ export default function VSCode({ onLaunchGame }: Props) {
 
   const commitNewItem = () => {
     const name = newItemName.trim();
-    if (!name) { setNewItemParent(null); setNewItemName(""); return; }
+
+    if (!name) {
+      setNewItemParent(null);
+      setNewItemName("");
+      return;
+    }
+
     const parent = newItemParent ?? "root";
-    const parentEntry = files.find(f => f.id === parent);
-    const depth = (parentEntry?.depth ?? 0) + 1;
-    const rawExt = name.split(".").pop() ?? "";
+    const realParentId = parent === "root" ? null : parent;
+
+    const parentEntry = files.find(f => f.id === realParentId);
+    const depth = realParentId === null ? 0 : (parentEntry?.depth ?? 0) + 1;
+
+    const rawExt = name.includes(".") ? name.split(".").pop() ?? "" : "";
     const ext = name.startsWith(".git") ? "git" : rawExt;
+
     const newEntry: FileEntry = {
       id: `${name}-${Date.now()}`,
-      name, isFolder: newItemType === "folder",
-      parentId: parent, depth,
-      lang: newItemType === "file" ? (rawExt === "ts" ? "typescript" : rawExt === "tsx" ? "typescriptreact" : rawExt === "py" ? "python" : rawExt === "go" ? "go" : rawExt === "css" ? "css" : rawExt === "html" ? "html" : rawExt === "json" ? "json" : rawExt === "md" ? "markdown" : "plaintext") : undefined,
+      name,
+      isFolder: newItemType === "folder",
+      parentId: realParentId,
+      depth,
+      lang:
+        newItemType === "file"
+          ? rawExt === "ts"
+            ? "typescript"
+            : rawExt === "tsx"
+            ? "typescriptreact"
+            : rawExt === "py"
+            ? "python"
+            : rawExt === "go"
+            ? "go"
+            : rawExt === "css"
+            ? "css"
+            : rawExt === "html"
+            ? "html"
+            : rawExt === "json"
+            ? "json"
+            : rawExt === "md"
+            ? "markdown"
+            : "plaintext"
+          : undefined,
       ext: newItemType === "file" ? ext : undefined,
     };
+
     setFiles(f => [...f, newEntry]);
+
     if (newItemType === "file") {
       setFileContents(c => ({ ...c, [name]: "" }));
       setTimeout(() => openFile(newEntry.id), 50);
     }
-    setExpanded(ex => ({ ...ex, [parent]: true }));
+
+    if (realParentId !== null) {
+      setExpanded(ex => ({ ...ex, [realParentId]: true }));
+    }
+
     setNewItemParent(null);
     setNewItemName("");
   };
@@ -771,15 +1074,38 @@ export default function VSCode({ onLaunchGame }: Props) {
     const hidx = historyIdxes[activeTermId] ?? -1;
     if (e.key === "Enter") {
       const input = termInput.trim();
-      const result = runCmd(input, files, fileContents);
-      setTermSessions(ss => ss.map(s => {
-        if (s.id !== activeTermId) return s;
-        if (result === "\x00CLEAR") return { ...s, lines: [] };
-        return { ...s, lines: [...s.lines, `\x02${CWD}\x03${input}`, ...(result ? result.split("\n") : [])] };
-      }));
-      if (input) setTermHistories(h => ({ ...h, [activeTermId]: [input, ...(h[activeTermId]??[])].slice(0,100) }));
-      setHistoryIdxes(h => ({ ...h, [activeTermId]: -1 }));
+      const sessionId = activeTermId;
+
+      setTermSessions(ss =>
+        ss.map(s =>
+          s.id === sessionId
+            ? { ...s, lines: [...s.lines, `\x02${CWD}\x03${input}`, ...(input ? ["Running..."] : [])] }
+            : s
+        )
+      );
+
+      if (input) {
+        setTermHistories(h => ({
+          ...h,
+          [sessionId]: [input, ...(h[sessionId] ?? [])].slice(0, 100),
+        }));
+      }
+
+      setHistoryIdxes(h => ({ ...h, [sessionId]: -1 }));
       setTermInput("");
+
+          runCmd(input, files, fileContentsRef.current, activeTab).then(result => {
+        setTermSessions(ss =>
+          ss.map(s => {
+            if (s.id !== sessionId) return s;
+            const lines = s.lines.filter(line => line !== "Running...");
+            if (result === "\x00CLEAR") return { ...s, lines: [] };
+            return { ...s, lines: [...lines, ...(result ? result.split("\n") : [])] };
+          })
+        );
+      });
+
+      return;
     }
     if (e.key === "ArrowUp") { e.preventDefault(); const idx=Math.min(hidx+1,history.length-1); setHistoryIdxes(h=>({...h,[activeTermId]:idx})); setTermInput(history[idx]??""); }
     if (e.key === "ArrowDown") { e.preventDefault(); const idx=Math.max(hidx-1,-1); setHistoryIdxes(h=>({...h,[activeTermId]:idx})); setTermInput(idx===-1?"":history[idx]); }
@@ -836,7 +1162,7 @@ export default function VSCode({ onLaunchGame }: Props) {
 
   const filteredLangs = LANGUAGES.filter(l => l.toLowerCase().includes(langFilter.toLowerCase()));
   const activeFile = activeTab ? files.find(f => f.id === activeTab) : null;
-  const activeCode = activeFile ? getFileContent(activeFile.name) : "";
+  const activeCode = activeFile ? getFileContent(activeFile.id) : "";
 
   // Search dropdown results
   const searchDropdownFiles = files.filter(f => !f.isFolder && f.name.toLowerCase().includes(searchValue.toLowerCase())).slice(0, 8);
@@ -1122,23 +1448,120 @@ export default function VSCode({ onLaunchGame }: Props) {
                   ))}
                 </div>
                 <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-                  <pre aria-hidden style={{ position: "absolute", inset: 0, margin: 0, padding: "8px 8px 8px 0", fontFamily: "'Cascadia Code','Fira Code','Consolas',monospace", fontSize: "14px", lineHeight: "1.6", overflow: "hidden", pointerEvents: "none", whiteSpace: "pre", color: "#d4d4d4" }}
-                    dangerouslySetInnerHTML={{ __html: highlight(activeCode, activeFile.lang ?? "plaintext") }} />
+                  <pre
+                    aria-hidden
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      margin: 0,
+                      padding: "8px 8px 8px 0",
+                      fontFamily: "'Cascadia Code','Fira Code','Consolas',monospace",
+                      fontSize: "14px",
+                      lineHeight: "1.6",
+                      overflow: "hidden",
+                      pointerEvents: "none",
+                      whiteSpace: "pre",
+                      color: "#d4d4d4",
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: highlight(activeCode, activeFile.lang ?? languageFromFileName(activeFile.name)),
+                    }}
+                  />
+
                   <textarea
                     value={activeCode}
                     onChange={e => {
-                      const nm = activeFile.name;
-                      setFileContents(c => ({ ...c, [nm]: e.target.value, [activeTab]: e.target.value }));
+                      const next = e.target.value;
+                      setFileContents(c => ({
+                        ...c,
+                        [activeFile.name]: next,
+                        [activeFile.id]: next,
+                      }));
                     }}
                     onKeyDown={e => {
+                      const ta = e.currentTarget;
+                      const start = ta.selectionStart;
+                      const end = ta.selectionEnd;
+                      const value = ta.value;
+
+                      const updateCode = (next: string, cursor: number) => {
+                        setFileContents(c => ({
+                          ...c,
+                          [activeFile.name]: next,
+                          [activeFile.id]: next,
+                        }));
+
+                        setTimeout(() => {
+                          ta.selectionStart = ta.selectionEnd = cursor;
+                        }, 0);
+                      };
+
+                      const pairs: Record<string, string> = {
+                        "(": ")",
+                        "[": "]",
+                        "{": "}",
+                        '"': '"',
+                        "'": "'",
+                        "`": "`",
+                      };
+
                       if (e.key === "Tab") {
                         e.preventDefault();
-                        const ta = e.currentTarget;
-                        const s = ta.selectionStart; const end = ta.selectionEnd;
-                        const nv = ta.value.substring(0, s) + "  " + ta.value.substring(end);
-                        const nm = activeFile.name;
-                        setFileContents(c => ({ ...c, [nm]: nv, [activeTab]: nv }));
-                        setTimeout(() => { ta.selectionStart = ta.selectionEnd = s + 2; }, 0);
+                        updateCode(value.slice(0, start) + "  " + value.slice(end), start + 2);
+                        return;
+                      }
+
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+
+                        const before = value.slice(0, start);
+                        const after = value.slice(end);
+                        const currentLine = before.split("\n").pop() ?? "";
+                        const indent = currentLine.match(/^\s*/)?.[0] ?? "";
+                        const extraIndent = /[\{\[\(]\s*$/.test(currentLine) ? "  " : "";
+
+                        updateCode(before + "\n" + indent + extraIndent + after, start + 1 + indent.length + extraIndent.length);
+                        return;
+                      }
+
+                      if ([")", "]", "}", '"', "'", "`"].includes(e.key)) {
+                        if (value[start] === e.key) {
+                          e.preventDefault();
+                          ta.selectionStart = ta.selectionEnd = start + 1;
+                          return;
+                        }
+                      }
+
+                      if (pairs[e.key]) {
+                        e.preventDefault();
+
+                        const close = pairs[e.key];
+                        const selected = value.slice(start, end);
+                        const next = value.slice(0, start) + e.key + selected + close + value.slice(end);
+
+                        updateCode(next, start + 1 + selected.length);
+                        return;
+                      }
+
+                      if (e.key === ">" && (activeFile.lang === "html" || activeFile.name.endsWith(".html"))) {
+                        const before = value.slice(0, start);
+                        const tagMatch = before.match(/<([a-zA-Z][\w-]*)(?:\s[^<>]*)?$/);
+
+                        const voidTags = new Set([
+                          "area", "base", "br", "col", "embed", "hr", "img", "input",
+                          "link", "meta", "param", "source", "track", "wbr",
+                        ]);
+
+                        if (tagMatch) {
+                          const tag = tagMatch[1].toLowerCase();
+
+                          if (!voidTags.has(tag) && !before.endsWith("</")) {
+                            e.preventDefault();
+                            const insert = `></${tag}>`;
+                            updateCode(value.slice(0, start) + insert + value.slice(end), start + 1);
+                            return;
+                          }
+                        }
                       }
                     }}
                     onSelect={e => {
@@ -1148,9 +1571,30 @@ export default function VSCode({ onLaunchGame }: Props) {
                       setCursorLine(lines.length);
                       setCursorCol(lines[lines.length - 1].length + 1);
                     }}
-                    onScroll={e => { if (lineNumRef.current) lineNumRef.current.scrollTop = e.currentTarget.scrollTop; }}
-                    style={{ position: "absolute", inset: 0, background: "transparent", color: "transparent", caretColor: "#aeafad", border: "none", outline: "none", resize: "none", fontFamily: "'Cascadia Code','Fira Code','Consolas',monospace", fontSize: "14px", lineHeight: "1.6", padding: "8px 8px 8px 0", tabSize: 2, overflowY: "auto", whiteSpace: "pre" }}
-                    spellCheck={false} autoCapitalize="off" autoCorrect="off"
+                    onScroll={e => {
+                      if (lineNumRef.current) lineNumRef.current.scrollTop = e.currentTarget.scrollTop;
+                    }}
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      background: "transparent",
+                      color: "transparent",
+                      WebkitTextFillColor: "transparent",
+                      caretColor: "#ffffff",
+                      border: "none",
+                      outline: "none",
+                      resize: "none",
+                      fontFamily: "'Cascadia Code','Fira Code','Consolas',monospace",
+                      fontSize: "14px",
+                      lineHeight: "1.6",
+                      padding: "8px 8px 8px 0",
+                      tabSize: 2,
+                      overflowY: "auto",
+                      whiteSpace: "pre",
+                    }}
+                    spellCheck={false}
+                    autoCapitalize="off"
+                    autoCorrect="off"
                   />
                 </div>
               </div>
@@ -1432,7 +1876,7 @@ function MenuBar({ searchBarRef, searchOpen, searchValue, searchInputRef, onSear
             <div style={{ position: "absolute", top: "24px", left: 0, right: 0, background: "#252526", border: "1px solid #454545", borderRadius: "0 0 4px 4px", zIndex: 400, boxShadow: "0 4px 16px rgba(0,0,0,0.5)", maxHeight: "280px", overflow: "auto" }}>
               {searchValue.trim() && (
                 <div style={{ padding: "4px 12px", fontSize: "11px", color: "#858585", borderBottom: "1px solid #333" }}>
-                  Type e1.5.2 / e1.8.8 / e1.12.2 + Enter to launch Eaglercraft
+                  
                 </div>
               )}
               {searchResults.length === 0 && searchValue.trim() ? (
