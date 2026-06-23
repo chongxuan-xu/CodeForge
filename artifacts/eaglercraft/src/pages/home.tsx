@@ -453,62 +453,7 @@ function highlight(code: string, lang: string): string {
       .replace(/\b(\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|deg|s|ms)?)\b/g, '<span style="color:#b5cea8">$1</span>');
   }
   if (lang === "html") {
-    let out = "";
-    let i = 0;
-
-    while (i < code.length) {
-      if (code.startsWith("<!--", i)) {
-        const end = code.indexOf("-->", i + 4);
-        const part = end === -1 ? code.slice(i) : code.slice(i, end + 3);
-        out += `<span style="color:#6a9955">${esc(part)}</span>`;
-        i += part.length;
-        continue;
-      }
-
-      if (code[i] === "<") {
-        const end = code.indexOf(">", i + 1);
-
-        if (end === -1) {
-          out += esc(code.slice(i));
-          break;
-        }
-
-        const tagText = code.slice(i, end + 1);
-        const match = tagText.match(/^<\/?([a-zA-Z][\w-]*)/);
-
-        if (!match) {
-          out += esc(tagText);
-          i = end + 1;
-          continue;
-        }
-
-        let colored = esc(tagText);
-
-        colored = colored.replace(
-          /^(&lt;\/?)([a-zA-Z][\w-]*)/,
-          `$1<span style="color:#569cd6">$2</span>`,
-        );
-
-        colored = colored.replace(
-          /\s([a-zA-Z_:][-a-zA-Z0-9_:.]*)(=)/g,
-          ` <span style="color:#9cdcfe">$1</span>$2`,
-        );
-
-        colored = colored.replace(
-          /=(&quot;[^&]*&quot;|'[^']*')/g,
-          `=<span style="color:#ce9178">$1</span>`,
-        );
-
-        out += colored;
-        i = end + 1;
-        continue;
-      }
-
-      out += esc(code[i]);
-      i++;
-    }
-
-    return out;
+    return esc(code);
   }
 
   const kws = KEYWORDS[lang] ?? [];
@@ -1417,25 +1362,72 @@ export default function VSCode({ onLaunchGame }: Props) {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
 
           {/* Tab Bar */}
-          <div style={{ display: "flex", background: "#252526", borderBottom: "1px solid #1e1e1e", overflowX: "auto", flexShrink: 0, height: "35px", alignItems: "stretch" }}>
-            {openTabs.map(tabId => {
-              const f = files.find(x => x.id === tabId);
-              if (!f) return null;
-              const isActive = activeTab === tabId;
+          <div style={{ display: "flex", background: "#252526", borderBottom: "1px solid #1e1e1e", flexShrink: 0, height: "35px", alignItems: "stretch" }}>
+            <div style={{ display: "flex", overflowX: "auto", flex: 1, alignItems: "stretch" }}>
+              {openTabs.map(tabId => {
+                const f = files.find(x => x.id === tabId);
+                if (!f) return null;
+                const isActive = activeTab === tabId;
+                return (
+                  <div key={tabId} onClick={() => openFile(tabId)}
+                    style={{ display: "flex", alignItems: "center", gap: "6px", padding: "0 6px 0 12px", borderRight: "1px solid #1e1e1e", cursor: "pointer", background: isActive ? "#1e1e1e" : "#2d2d2d", borderTop: isActive ? "1px solid #007acc" : "1px solid transparent", color: isActive ? "#fff" : "#969696", whiteSpace: "nowrap", userSelect: "none", minWidth: "100px" }}>
+                    <FileIcon name={f.name} ext={f.ext} />
+                    <span style={{ fontSize: "13px" }}>{f.name}</span>
+                    <span onClick={e => closeTab(tabId, e)}
+                      style={{ padding: "2px 3px", borderRadius: "3px", cursor: "pointer", display: "flex", alignItems: "center" }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "#404040")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                      {SvgClose()}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            {activeFile && (() => {
+              const lang = activeFile.lang ?? languageFromFileName(activeFile.name);
+              const NON_RUN = ["html","css","scss","json","markdown","plaintext","xml","svg"];
+              if (NON_RUN.includes(lang)) return null;
+              const ext = activeFile.ext ?? activeFile.name.split(".").pop() ?? "";
+              const CMD: Record<string, string> = {
+                py:"python3",js:"node",mjs:"node",ts:"tsx",tsx:"tsx",go:"go run",
+                rs:"rustc",rb:"ruby",php:"php",java:"java",c:"gcc",cpp:"g++",
+                kt:"kotlinc",swift:"swift",lua:"lua",sh:"bash",r:"Rscript",
+                dart:"dart",scala:"scala",cs:"dotnet run",hs:"runhaskell",
+                ex:"elixir",exs:"elixir",jl:"julia",nim:"nim r",zig:"zig run",
+              };
+              const base = CMD[ext];
+              if (!base) return null;
+              const fullCmd = base === "go run" ? `go run ${activeFile.name}` : `${base} ${activeFile.name}`;
               return (
-                <div key={tabId} onClick={() => openFile(tabId)}
-                  style={{ display: "flex", alignItems: "center", gap: "6px", padding: "0 6px 0 12px", borderRight: "1px solid #1e1e1e", cursor: "pointer", background: isActive ? "#1e1e1e" : "#2d2d2d", borderTop: isActive ? "1px solid #007acc" : "1px solid transparent", color: isActive ? "#fff" : "#969696", whiteSpace: "nowrap", userSelect: "none", minWidth: "100px" }}>
-                  <FileIcon name={f.name} ext={f.ext} />
-                  <span style={{ fontSize: "13px" }}>{f.name}</span>
-                  <span onClick={e => closeTab(tabId, e)}
-                    style={{ padding: "2px 3px", borderRadius: "3px", cursor: "pointer", display: "flex", alignItems: "center" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#404040")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                    {SvgClose()}
-                  </span>
-                </div>
+                <button
+                  title={`Run: ${fullCmd}`}
+                  onClick={() => {
+                    setTerminalOpen(true);
+                    const sessionId = activeTermId;
+                    setTermSessions(ss => ss.map(s =>
+                      s.id === sessionId
+                        ? { ...s, lines: [...s.lines, `\x02${CWD}\x03${fullCmd}`, "Running..."] }
+                        : s
+                    ));
+                    setTermHistories(h => ({ ...h, [sessionId]: [fullCmd, ...(h[sessionId] ?? [])].slice(0, 100) }));
+                    runCmd(fullCmd, files, fileContentsRef.current, activeTab).then(result => {
+                      setTermSessions(ss => ss.map(s => {
+                        if (s.id !== sessionId) return s;
+                        const lines = s.lines.filter(l => l !== "Running...");
+                        if (result === "\x00CLEAR") return { ...s, lines: [] };
+                        return { ...s, lines: [...lines, ...(result ? result.split("\n") : [])] };
+                      }));
+                    });
+                  }}
+                  style={{ display: "flex", alignItems: "center", gap: "5px", margin: "auto 8px", padding: "4px 12px", background: "#388a34", border: "none", borderRadius: "4px", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer", flexShrink: 0, userSelect: "none", letterSpacing: "0.3px" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#4caf50")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "#388a34")}
+                >
+                  <svg width="10" height="12" viewBox="0 0 10 12"><polygon points="0,0 10,6 0,12" fill="#fff"/></svg>
+                  Run
+                </button>
               );
-            })}
+            })()}
           </div>
 
           {/* Editor */}
