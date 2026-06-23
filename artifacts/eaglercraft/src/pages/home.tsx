@@ -833,6 +833,69 @@ export default function VSCode({ onLaunchGame }: Props) {
   const [newItemName, setNewItemName] = useState("");
   const newItemRef = useRef<HTMLInputElement>(null);
 
+  // Context menu
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; entry: FileEntry } | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameVal, setRenameVal] = useState("");
+  const renameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const close = () => setCtxMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("contextmenu", close);
+    return () => { window.removeEventListener("click", close); window.removeEventListener("contextmenu", close); };
+  }, []);
+
+  const openCtxMenu = (e: React.MouseEvent, entry: FileEntry) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ x: e.clientX, y: e.clientY, entry });
+  };
+
+  const commitRename = () => {
+    const name = renameVal.trim();
+    if (!name || !renamingId) { setRenamingId(null); return; }
+    setFiles(fs => fs.map(f => {
+      if (f.id !== renamingId) return f;
+      const ext = name.includes(".") ? name.split(".").pop() : undefined;
+      return { ...f, name, ext };
+    }));
+    setFileContents(c => {
+      const old = fs => fs.find((f: FileEntry) => f.id === renamingId);
+      return c;
+    });
+    setOpenTabs(tabs => tabs.map(t => t));
+    setRenamingId(null);
+  };
+
+  const deleteEntry = (entry: FileEntry) => {
+    const idsToDelete = new Set<string>();
+    const collect = (id: string) => {
+      idsToDelete.add(id);
+      files.filter(f => f.parentId === id).forEach(child => collect(child.id));
+    };
+    collect(entry.id);
+    setFiles(fs => fs.filter(f => !idsToDelete.has(f.id)));
+    setOpenTabs(tabs => {
+      const next = tabs.filter(t => !idsToDelete.has(t));
+      if (activeTab && idsToDelete.has(activeTab)) setActiveTab(next[0] ?? null);
+      return next;
+    });
+    if (selectedFile && idsToDelete.has(selectedFile)) setSelectedFile(null);
+  };
+
+  const copyPath = (entry: FileEntry) => {
+    const parts: string[] = [entry.name];
+    let cur = entry.parentId;
+    while (cur) {
+      const parent = files.find(f => f.id === cur);
+      if (!parent) break;
+      parts.unshift(parent.name);
+      cur = parent.parentId;
+    }
+    navigator.clipboard.writeText("~/" + parts.join("/")).catch(() => {});
+  };
+
   // Search bar dropdown (in menu bar)
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
@@ -1210,9 +1273,11 @@ export default function VSCode({ onLaunchGame }: Props) {
                       key={f.id}
                       onClick={e => {
                         e.stopPropagation();
+                        if (renamingId === f.id) return;
                         if (f.isFolder) { setExpanded(ex => ({ ...ex, [f.id]: !ex[f.id] })); setSelectedFile(f.id); }
                         else openFile(f.id);
                       }}
+                      onContextMenu={e => { setSelectedFile(f.id); openCtxMenu(e, f); }}
                       style={{ display: "flex", alignItems: "center", gap: "4px", paddingLeft: `${f.depth * 12 + 4}px`, paddingRight: "8px", height: "22px", cursor: "pointer", background: selectedFile === f.id ? "#094771" : "transparent", userSelect: "none" }}
                       onMouseEnter={e => { if (selectedFile !== f.id) e.currentTarget.style.background = "#2a2d2e"; }}
                       onMouseLeave={e => { if (selectedFile !== f.id) e.currentTarget.style.background = "transparent"; }}
@@ -1221,7 +1286,19 @@ export default function VSCode({ onLaunchGame }: Props) {
                         ? <><span style={{ width: "12px", flexShrink: 0 }}>{expanded[f.id] ? <SvgChevD /> : <SvgChevR />}</span>
                             <FolderIcon open={!!expanded[f.id]} /></>
                         : <><span style={{ width: "12px", flexShrink: 0 }} /><FileIcon name={f.name} ext={f.ext} /></>}
-                      <span style={{ fontSize: "13px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
+                      {renamingId === f.id
+                        ? <input
+                            ref={renameRef}
+                            value={renameVal}
+                            autoFocus
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => setRenameVal(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenamingId(null); }}
+                            onBlur={commitRename}
+                            style={{ flex: 1, background: "#3c3c3c", border: "1px solid #007acc", color: "#cccccc", padding: "0 4px", fontSize: "13px", outline: "none", borderRadius: "2px", height: "18px", minWidth: 0 }}
+                          />
+                        : <span style={{ fontSize: "13px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
+                      }
                     </div>
                   ))}
                   <div style={{ minHeight: "40px" }} onClick={() => setSelectedFile(null)} />
@@ -1693,6 +1770,61 @@ export default function VSCode({ onLaunchGame }: Props) {
         <SBtn text="UTF-8" /><SBtn text="LF" /><SBtn text="Spaces: 2" />
         {activeTab && <SBtn text={`Ln ${cursorLine}, Col ${cursorCol}`} />}
       </div>
+
+      {/* Context Menu */}
+      {ctxMenu && (() => {
+        const entry = ctxMenu.entry;
+        const isFolder = !!entry.isFolder;
+        const menuW = 200;
+        const menuH = isFolder ? 196 : 156;
+        const x = Math.min(ctxMenu.x, window.innerWidth - menuW - 8);
+        const y = Math.min(ctxMenu.y, window.innerHeight - menuH - 8);
+
+        const Item = ({ label, icon, onClick, danger }: { label: string; icon: React.ReactNode; onClick: () => void; danger?: boolean }) => (
+          <div
+            onClick={e => { e.stopPropagation(); onClick(); setCtxMenu(null); }}
+            style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 12px", cursor: "pointer", color: danger ? "#f48771" : "#cccccc", fontSize: "13px" }}
+            onMouseEnter={e => (e.currentTarget.style.background = danger ? "#5a1d1d" : "#2a2d2e")}
+            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+          >
+            {icon}
+            {label}
+          </div>
+        );
+
+        const Sep = () => <div style={{ height: "1px", background: "#454545", margin: "2px 0" }} />;
+
+        return (
+          <div
+            onClick={e => e.stopPropagation()}
+            onContextMenu={e => e.preventDefault()}
+            style={{ position: "fixed", left: x, top: y, width: menuW, background: "#252526", border: "1px solid #454545", borderRadius: "4px", boxShadow: "0 4px 16px rgba(0,0,0,0.6)", zIndex: 9999, paddingTop: "4px", paddingBottom: "4px", userSelect: "none" }}
+          >
+            {!isFolder && (
+              <Item label="Open" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="#cccccc" strokeWidth="2"/><path d="M3 9h18" stroke="#cccccc" strokeWidth="2"/></svg>}
+                onClick={() => openFile(entry.id)} />
+            )}
+            {isFolder && (
+              <>
+                <Item label="New File" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="#cccccc" strokeWidth="2"/><polyline points="14 2 14 8 20 8" stroke="#cccccc" strokeWidth="2"/><line x1="12" y1="13" x2="12" y2="19" stroke="#cccccc" strokeWidth="2"/><line x1="9" y1="16" x2="15" y2="16" stroke="#cccccc" strokeWidth="2"/></svg>}
+                  onClick={() => { setSelectedFile(entry.id); setExpanded(ex => ({ ...ex, [entry.id]: true })); startNewItem("file"); }} />
+                <Item label="New Folder" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" stroke="#cccccc" strokeWidth="2"/><line x1="12" y1="11" x2="12" y2="17" stroke="#cccccc" strokeWidth="2"/><line x1="9" y1="14" x2="15" y2="14" stroke="#cccccc" strokeWidth="2"/></svg>}
+                  onClick={() => { setSelectedFile(entry.id); setExpanded(ex => ({ ...ex, [entry.id]: true })); startNewItem("folder"); }} />
+                <Sep />
+              </>
+            )}
+            <Item label="Rename" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="#cccccc" strokeWidth="2"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="#cccccc" strokeWidth="2"/></svg>}
+              onClick={() => { setRenamingId(entry.id); setRenameVal(entry.name); setTimeout(() => renameRef.current?.select(), 30); }} />
+            <Item label="Copy Path" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" stroke="#cccccc" strokeWidth="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="#cccccc" strokeWidth="2"/></svg>}
+              onClick={() => copyPath(entry)} />
+            <Item label="Copy Relative Path" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="#cccccc" strokeWidth="2"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="#cccccc" strokeWidth="2"/></svg>}
+              onClick={() => navigator.clipboard.writeText(entry.name).catch(() => {})} />
+            <Sep />
+            <Item label="Delete" danger icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><polyline points="3 6 5 6 21 6" stroke="#f48771" strokeWidth="2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="#f48771" strokeWidth="2"/><path d="M10 11v6M14 11v6" stroke="#f48771" strokeWidth="2"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" stroke="#f48771" strokeWidth="2"/></svg>}
+              onClick={() => deleteEntry(entry)} />
+          </div>
+        );
+      })()}
     </div>
   );
 }
