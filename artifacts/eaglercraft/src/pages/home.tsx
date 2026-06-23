@@ -1318,18 +1318,18 @@ export default function VSCode({ onLaunchGame }: Props) {
                       onKeyDown={e => e.key === "Enter" && doSearch()}
                       placeholder="Search"
                       autoFocus
-                      style={{ flex: 1, background: "#3c3c3c", border: "1px solid #555", color: "#cccccc", padding: "5px 8px", fontSize: "13px", outline: "none", borderRadius: "2px" }}
+                      style={{ flex: 1, background: "#3c3c3c", border: "1px solid #555", color: "#cccccc", padding: "2px 8px", fontSize: "13px", outline: "none", borderRadius: "2px" }}
                     />
-                    <button onClick={doSearch} style={{ background: "#0e639c", border: "none", color: "#fff", padding: "0 8px", cursor: "pointer", borderRadius: "2px", fontSize: "12px" }}>Find</button>
+                    <button onClick={doSearch} style={{ background: "#0e639c", border: "none", color: "#fff", padding: "0 8px", cursor: "pointer", borderRadius: "2px", fontSize: "11px" }}>Find</button>
                   </div>
                   <div style={{ display: "flex", gap: "4px" }}>
                     <input
                       value={sidebarReplaceQ}
                       onChange={e => setSidebarReplaceQ(e.target.value)}
                       placeholder="Replace"
-                      style={{ flex: 1, background: "#3c3c3c", border: "1px solid #555", color: "#cccccc", padding: "5px 8px", fontSize: "13px", outline: "none", borderRadius: "2px" }}
+                      style={{ flex: 1, background: "#3c3c3c", border: "1px solid #555", color: "#cccccc", padding: "2px 8px", fontSize: "13px", outline: "none", borderRadius: "2px" }}
                     />
-                    <button onClick={doReplaceAll} style={{ background: "#0e639c", border: "none", color: "#fff", padding: "0 8px", cursor: "pointer", borderRadius: "2px", fontSize: "12px" }}>Replace All</button>
+                    <button onClick={doReplaceAll} style={{ background: "#0e639c", border: "none", color: "#fff", padding: "0 8px", cursor: "pointer", borderRadius: "2px", fontSize: "11px" }}>Replace All</button>
                   </div>
                 </div>
                 {searchResults.length > 0 && (
