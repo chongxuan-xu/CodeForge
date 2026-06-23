@@ -716,76 +716,86 @@ function languageFromFileName(name: string): string {
   return "plaintext";
 }
 
-const PISTON_LANG: Record<string, { language: string; version: string }> = {
-  python:          { language: "python",     version: "3.*"  },
-  javascript:      { language: "javascript", version: "18.*" },
-  javascriptreact: { language: "javascript", version: "18.*" },
-  typescript:      { language: "typescript", version: "5.*"  },
-  typescriptreact: { language: "typescript", version: "5.*"  },
-  go:              { language: "go",         version: "1.*"  },
-  rust:            { language: "rust",       version: "1.*"  },
-  java:            { language: "java",       version: "15.*" },
-  c:               { language: "c",          version: "10.*" },
-  cpp:             { language: "c++",        version: "10.*" },
-  ruby:            { language: "ruby",       version: "3.*"  },
-  php:             { language: "php",        version: "8.*"  },
-  kotlin:          { language: "kotlin",     version: "1.*"  },
-  swift:           { language: "swift",      version: "5.*"  },
-  lua:             { language: "lua",        version: "5.*"  },
-  bash:            { language: "bash",       version: "5.*"  },
-  r:               { language: "r",          version: "4.*"  },
-  dart:            { language: "dart",       version: "2.*"  },
-  scala:           { language: "scala",      version: "3.*"  },
-  csharp:          { language: "csharp",     version: "6.*"  },
-  fsharp:          { language: "fsharp",     version: "5.*"  },
-  haskell:         { language: "haskell",    version: "9.*"  },
-  elixir:          { language: "elixir",     version: "1.*"  },
-  perl:            { language: "perl",       version: "5.*"  },
-  julia:           { language: "julia",      version: "1.*"  },
-  nim:             { language: "nim",        version: "1.*"  },
-  zig:             { language: "zig",        version: "0.*"  },
+// ─── Wandbox compiler map (free, no API key) ────────────────────────────────
+type WandboxSpec = { compiler: string; compilerOptionRaw?: string; options?: string };
+
+const WANDBOX_COMPILER: Record<string, WandboxSpec> = {
+  python:          { compiler: "cpython-3.12.3" },
+  javascript:      { compiler: "nodejs-20.11.0" },
+  javascriptreact: { compiler: "nodejs-20.11.0" },
+  typescript:      { compiler: "deno-1.44.4" },
+  typescriptreact: { compiler: "deno-1.44.4" },
+  go:              { compiler: "go-1.22.3" },
+  rust:            { compiler: "rust-1.78.0" },
+  c:               { compiler: "gcc-13.2.0", compilerOptionRaw: "-x c -std=c11 -Wall" },
+  cpp:             { compiler: "gcc-13.2.0", options: "warning", compilerOptionRaw: "-std=c++17" },
+  ruby:            { compiler: "ruby-3.3.1" },
+  php:             { compiler: "php-8.3.6" },
+  lua:             { compiler: "lua-5.4.6" },
+  haskell:         { compiler: "ghc-9.8.2" },
+  bash:            { compiler: "bash" },
+  perl:            { compiler: "perl-5.38.2" },
+  swift:           { compiler: "swift-5.10" },
+  elixir:          { compiler: "elixir-1.16.2" },
+  scala:           { compiler: "scala-3.4.1" },
+  erlang:          { compiler: "erlang-26.2.5" },
+  clojure:         { compiler: "clojure-1.11.3" },
+  coffeescript:    { compiler: "coffeescript-2.7.0" },
 };
 
 async function executeOnline(req: RunRequest): Promise<string> {
-  const spec = PISTON_LANG[req.language.toLowerCase()];
+  const spec = WANDBOX_COMPILER[req.language.toLowerCase()];
   if (!spec) {
-    return `'${req.language}' is not a supported execution language.\nSupported: python, javascript, typescript, go, rust, java, c, c++, ruby, php, kotlin, swift, lua, bash, r, dart, scala, and more.`;
+    return [
+      `No execution runtime available for '${req.language}'.`,
+      `Supported: Python, JavaScript, TypeScript, Go, Rust, C, C++, Ruby, PHP, Lua, Haskell, Bash, Perl, Swift, Elixir, Scala, Erlang, Clojure.`,
+    ].join("\n");
   }
   try {
-    const res = await fetch("https://emkc.org/api/v2/piston/execute", {
+    const body: Record<string, string> = {
+      compiler: spec.compiler,
+      code: req.code,
+    };
+    if (spec.options) body.options = spec.options;
+    if (spec.compilerOptionRaw) body["compiler-option-raw"] = spec.compilerOptionRaw;
+
+    const res = await fetch("https://wandbox.org/api/compile.json", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        language: spec.language,
-        version: spec.version,
-        files: [{ name: req.filename, content: req.code }],
-      }),
+      body: JSON.stringify(body),
     });
+
     if (!res.ok) {
       const text = await res.text();
-      return `Piston API error ${res.status}: ${text.slice(0, 300)}`;
+      return `Compiler error ${res.status}: ${text.slice(0, 400)}`;
     }
+
     const data = await res.json() as {
-      compile?: { code: number; output: string; stderr: string };
-      run?: { code: number; output: string; stderr: string; signal: string | null };
-      message?: string;
+      status: string;
+      compiler_output?: string;
+      compiler_error?: string;
+      compiler_message?: string;
+      program_output?: string;
+      program_error?: string;
+      program_message?: string;
     };
-    if (data.message) return `Error: ${data.message}`;
-    if (data.compile && data.compile.code !== 0) {
-      const out = (data.compile.stderr || data.compile.output || "Compilation failed").trim();
-      return out;
+
+    const compileErr = (data.compiler_error || "").trim();
+    const programOut = (data.program_output || data.program_message || "").trim();
+    const programErr = (data.program_error || "").trim();
+    const exitCode = Number(data.status ?? 0);
+
+    if (exitCode !== 0 && compileErr && !programOut) {
+      return compileErr;
     }
-    const run = data.run;
-    if (!run) return "No output.";
-    const output = run.output?.trim() || run.stderr?.trim() || "";
+    const output = [programOut, programErr].filter(Boolean).join("\n").trim();
+    if (!output && compileErr) return compileErr;
     if (!output) {
-      return run.signal
-        ? `Process killed by signal: ${run.signal}`
-        : run.code === 0
-          ? "Process exited with code 0"
-          : `Process exited with code ${run.code}`;
+      return exitCode === 0
+        ? "Process exited with code 0"
+        : `Process exited with code ${exitCode}`;
     }
-    return output;
+    return compileErr ? `${compileErr}\n\n${output}` : output;
   } catch (err) {
     return `Network error: ${err instanceof Error ? err.message : String(err)}`;
   }
