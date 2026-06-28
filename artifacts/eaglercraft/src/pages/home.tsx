@@ -1857,7 +1857,7 @@ function ExtCard({ ext, installed, installing, onInstall }: { ext: typeof ALL_EX
       <div style={{ color: "#858585", fontSize: "11px", margin: "2px 0" }}>{ext.desc}</div>
       <div style={{ color: "#6a9955", fontSize: "11px" }}>{ext.author}</div>
       <button onClick={onInstall}
-        style={{ marginTop: "5px", background: installed ? "#3c3c3c" : "#0e639c", color: installed ? "#cccccc" : "#fff", border: installed ? "1px solid #555" : "none", padding: "3px 10px", cursor: "pointer", fontSize: "11px", borderRadius: "2px", minWidth: "72px" }}>
+        style={{ marginTop: "5px", background: installed ? "#3c3c3c" : "#0e639c", color: installed ? "#cccccc" : "#fff", border: installed ? "1px solid #555" : "none", padding: "3px 10px", cursor: "pointer", fontSize: "11px", borderRadius: "2px", minWidth: "72px"}}>
         {installing ? "Installing..." : installed ? "Uninstall" : "Install"}
       </button>
     </div>
