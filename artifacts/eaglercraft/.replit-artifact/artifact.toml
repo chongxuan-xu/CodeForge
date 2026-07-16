@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "Student Learning Space"
+title = "CodeForge"
 version = "1.0.0"
 id = "artifacts/eaglercraft"
 router = "path"

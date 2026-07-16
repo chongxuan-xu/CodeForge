@@ -467,6 +467,7 @@ function highlightHTML(code: string): string {
     // DOCTYPE
     if (code.startsWith("<!", i)) {
       const end = code.indexOf(">", i);
+      if (end === -1) { result += esc(code.slice(i)); i = code.length; continue; }
       result += spanC("#569cd6", esc(code.slice(i, end + 1)));
       i = end + 1;
       continue;
