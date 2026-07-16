@@ -93,10 +93,25 @@ const FALLBACK: Record<string, { bg: string; fg: string; label: string }> = {
   git:  { bg: "#f14e32", fg: "#fff",    label: "GIT"  },
 };
 
+const PlainFileIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="#858585" strokeWidth="1.5" fill="none"/>
+    <polyline points="14 2 14 8 20 8" stroke="#858585" strokeWidth="1.5"/>
+    <line x1="8" y1="13" x2="16" y2="13" stroke="#858585" strokeWidth="1.5"/>
+    <line x1="8" y1="17" x2="13" y2="17" stroke="#858585" strokeWidth="1.5"/>
+  </svg>
+);
+
 function FileIcon({ name, ext }: { name: string; ext?: string }) {
   const [failed, setFailed] = useState(false);
   const key = (name.startsWith(".git")) ? "gitignore"
     : (ext ?? name.split(".").pop() ?? "").toLowerCase();
+
+  // Plain file icon for txt and unknown extensions
+  if (!key || key === "txt" || key === "document") {
+    return <PlainFileIcon />;
+  }
+
   const iconName = EXT_ICON[key];
   if (iconName && !failed) {
     return (
@@ -105,12 +120,15 @@ function FileIcon({ name, ext }: { name: string; ext?: string }) {
         style={{ flexShrink: 0, display: "block", minWidth: "16px" }} />
     );
   }
-  const ic = FALLBACK[key] ?? { bg: "#6d8086", fg: "#fff", label: key.slice(0,4).toUpperCase() || "FILE" };
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "16px", height: "16px", background: ic.bg, color: ic.fg, fontSize: "5.5px", fontWeight: "bold", borderRadius: "2px", flexShrink: 0, fontFamily: "monospace" }}>
-      {ic.label}
-    </span>
-  );
+  const ic = FALLBACK[key] ?? null;
+  if (ic) {
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "16px", height: "16px", background: ic.bg, color: ic.fg, fontSize: "5.5px", fontWeight: "bold", borderRadius: "2px", flexShrink: 0, fontFamily: "monospace" }}>
+        {ic.label}
+      </span>
+    );
+  }
+  return <PlainFileIcon />;
 }
 
 function FolderIcon({ open }: { open: boolean }) {
@@ -430,114 +448,330 @@ function esc(s: string) {
   return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
 
+function spanC(color: string, text: string) {
+  return `<span style="color:${color}">${text}</span>`;
+}
+
+function highlightHTML(code: string): string {
+  let result = "";
+  let i = 0;
+  while (i < code.length) {
+    // HTML comment
+    if (code.startsWith("<!--", i)) {
+      const end = code.indexOf("-->", i + 4);
+      const block = end === -1 ? code.slice(i) : code.slice(i, end + 3);
+      result += spanC("#6a9955", esc(block));
+      i = end === -1 ? code.length : end + 3;
+      continue;
+    }
+    // DOCTYPE
+    if (code.startsWith("<!", i)) {
+      const end = code.indexOf(">", i);
+      result += spanC("#569cd6", esc(code.slice(i, end + 1)));
+      i = end + 1;
+      continue;
+    }
+    // Tag
+    if (code[i] === "<") {
+      const isClose = code[i + 1] === "/";
+      let j = i + 1;
+      if (isClose) j++;
+      // Tag name
+      while (j < code.length && /[\w:-]/.test(code[j])) j++;
+      const tagName = code.slice(isClose ? i + 2 : i + 1, j);
+      result += spanC("#808080", esc(isClose ? "</" : "<"));
+      result += spanC("#4ec9b0", esc(tagName));
+      // Attributes
+      while (j < code.length && code[j] !== ">" && !(code[j] === "/" && code[j+1] === ">")) {
+        // whitespace
+        if (/\s/.test(code[j])) { result += esc(code[j]); j++; continue; }
+        // attribute name
+        let ak = j;
+        while (ak < code.length && /[\w:.-]/.test(code[ak])) ak++;
+        if (ak > j) {
+          result += spanC("#9cdcfe", esc(code.slice(j, ak)));
+          j = ak;
+          // = and value
+          if (code[j] === "=") {
+            result += spanC("#808080", "=");
+            j++;
+            const q = code[j];
+            if (q === '"' || q === "'") {
+              let vk = j + 1;
+              while (vk < code.length && code[vk] !== q) vk++;
+              result += spanC("#ce9178", esc(code.slice(j, vk + 1)));
+              j = vk + 1;
+            }
+          }
+          continue;
+        }
+        result += esc(code[j]); j++;
+      }
+      // closing > or />
+      if (code[j] === "/" && code[j+1] === ">") {
+        result += spanC("#808080", "/&gt;");
+        j += 2;
+      } else if (code[j] === ">") {
+        result += spanC("#808080", "&gt;");
+        j++;
+      }
+      i = j;
+      continue;
+    }
+    result += esc(code[i]);
+    i++;
+  }
+  return result;
+}
+
+function highlightYAML(code: string): string {
+  return code.split("\n").map(line => {
+    const e = esc(line);
+    // comment
+    if (/^\s*#/.test(line)) return spanC("#6a9955", e);
+    // key: value
+    const kv = line.match(/^(\s*)([\w.-]+)(\s*:\s*)(.*)$/);
+    if (kv) {
+      const [, ws, key, sep, val] = kv;
+      let coloredVal = val;
+      if (/^"/.test(val) || /^'/.test(val)) coloredVal = spanC("#ce9178", esc(val));
+      else if (/^(true|false|yes|no|on|off)$/i.test(val.trim())) coloredVal = spanC("#569cd6", esc(val));
+      else if (/^-?\d/.test(val.trim())) coloredVal = spanC("#b5cea8", esc(val));
+      else if (/^\|/.test(val.trim()) || /^>/.test(val.trim())) coloredVal = spanC("#ce9178", esc(val));
+      else coloredVal = esc(val);
+      return esc(ws) + spanC("#9cdcfe", esc(key)) + spanC("#808080", esc(sep)) + coloredVal;
+    }
+    // list item
+    if (/^\s*-\s/.test(line)) {
+      return line.replace(/^(\s*)(-)(\s+)(.*)$/, (_, ws, dash, sp, rest) =>
+        esc(ws) + spanC("#569cd6", "-") + esc(sp) + esc(rest)
+      );
+    }
+    return e;
+  }).join("\n");
+}
+
+function highlightCSS(code: string): string {
+  let result = "";
+  let i = 0;
+  while (i < code.length) {
+    // Block comment
+    if (code[i] === "/" && code[i+1] === "*") {
+      const end = code.indexOf("*/", i+2);
+      const block = end === -1 ? code.slice(i) : code.slice(i, end+2);
+      result += spanC("#6a9955", esc(block));
+      i = end === -1 ? code.length : end+2;
+      continue;
+    }
+    // String
+    if (code[i] === '"' || code[i] === "'") {
+      const q = code[i]; let j = i+1;
+      while (j < code.length && code[j] !== q) j++;
+      result += spanC("#ce9178", esc(code.slice(i, j+1)));
+      i = j+1; continue;
+    }
+    // At-rule
+    if (code[i] === "@") {
+      let j = i+1;
+      while (j < code.length && /[\w-]/.test(code[j])) j++;
+      result += spanC("#c586c0", esc(code.slice(i, j)));
+      i = j; continue;
+    }
+    // Property name (before :) — but not inside { } values
+    const propMatch = code.slice(i).match(/^([\w-]+)(\s*:)/);
+    if (propMatch && (i === 0 || /[\n;{]/.test(code[i-1]) || /^\s*$/.test(code.slice(code.lastIndexOf("\n", i)+1, i)))) {
+      result += spanC("#9cdcfe", esc(propMatch[1]));
+      i += propMatch[1].length; continue;
+    }
+    // Selector characters and class/id
+    if (code[i] === "." || code[i] === "#") {
+      let j = i+1;
+      while (j < code.length && /[\w-]/.test(code[j])) j++;
+      result += spanC("#d7ba7d", esc(code.slice(i, j)));
+      i = j; continue;
+    }
+    // Numbers with units
+    if (/\d/.test(code[i]) && (i===0 || /\W/.test(code[i-1]))) {
+      let j = i;
+      while (j < code.length && /[\d.%]/.test(code[j])) j++;
+      while (j < code.length && /[a-zA-Z]/.test(code[j])) j++;
+      result += spanC("#b5cea8", esc(code.slice(i, j)));
+      i = j; continue;
+    }
+    result += esc(code[i]);
+    i++;
+  }
+  return result;
+}
+
 function highlight(code: string, lang: string): string {
-  if (lang === "json") {
+  if (lang === "html" || lang === "xml") return highlightHTML(code);
+  if (lang === "yaml") return highlightYAML(code);
+  if (lang === "css" || lang === "scss" || lang === "less") return highlightCSS(code);
+
+  if (lang === "json" || lang === "jsonc") {
     return esc(code)
-      .replace(/("(?:[^"\\]|\\.)*")\s*:/g, '<span style="color:#9cdcfe">$1</span>:')
-      .replace(/:\s*("(?:[^"\\]|\\.)*")/g, ': <span style="color:#ce9178">$1</span>')
-      .replace(/\b(true|false|null)\b/g, '<span style="color:#569cd6">$1</span>')
-      .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span style="color:#b5cea8">$1</span>');
-  }
-  if (lang === "markdown") {
-    return esc(code)
-      .replace(/^(#{1,6} .+)$/gm, '<span style="color:#569cd6;font-weight:bold">$1</span>')
-      .replace(/(`[^`]+`)/g, '<span style="color:#ce9178">$1</span>')
-      .replace(/(\*\*[^*]+\*\*)/g, '<span style="font-weight:bold;color:#d4d4d4">$1</span>')
-      .replace(/^(\|.+\|)$/gm, '<span style="color:#4ec9b0">$1</span>');
-  }
-  if (lang === "css") {
-    return esc(code)
-      .replace(/(\/\*[\s\S]*?\*\/)/g, '<span style="color:#6a9955">$1</span>')
-      .replace(/([.#:\w-]+)\s*\{/g, '<span style="color:#d7ba7d">$1</span> {')
-      .replace(/([\w-]+)\s*:/g, '<span style="color:#9cdcfe">$1</span>:')
-      .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, '<span style="color:#ce9178">$1</span>')
-      .replace(/\b(\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|deg|s|ms)?)\b/g, '<span style="color:#b5cea8">$1</span>');
-  }
-  if (lang === "html") {
-    return esc(code);
+      .replace(/("(?:[^"\\]|\\.)*")\s*:/g, `${spanC("#9cdcfe","$1")}:`)
+      .replace(/:\s*("(?:[^"\\]|\\.)*")/g, (_,s) => `: ${spanC("#ce9178", s)}`)
+      .replace(/\b(true|false|null)\b/g, (_,w) => spanC("#569cd6", w))
+      .replace(/\b(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/g, (_,n) => spanC("#b5cea8", n));
   }
 
+  if (lang === "markdown") {
+    return code.split("\n").map(line => {
+      const e = esc(line);
+      if (/^#{1,6} /.test(line)) return spanC("#569cd6", e);
+      if (/^(---|\*\*\*|___)/.test(line.trim())) return spanC("#858585", e);
+      if (/^\s*[-*+] /.test(line)) return e.replace(/([-*+])/, spanC("#569cd6","$1"));
+      if (/^\s*\d+\. /.test(line)) return e.replace(/(\d+\.)/, spanC("#b5cea8","$1"));
+      if (/^(>+) /.test(line)) return e.replace(/^((?:&gt;)+)/, spanC("#6a9955","$1"));
+      if (/^```/.test(line)) return spanC("#d7ba7d", e);
+      return e
+        .replace(/(`[^`]+`)/g, spanC("#ce9178","$1"))
+        .replace(/(\*\*[^*]+\*\*)/g, `<strong style="color:#d4d4d4">$1</strong>`)
+        .replace(/(\*[^*]+\*)/g, `<em style="color:#d4d4d4">$1</em>`)
+        .replace(/(\[([^\]]+)\]\([^)]+\))/g, spanC("#4ec9b0","$1"));
+    }).join("\n");
+  }
+
+  // ── General token highlighter ─────────────────────────────────────────────
   const kws = KEYWORDS[lang] ?? [];
+  const hashComment = ["python","ruby","bash","r","elixir","perl","coffeescript","sh","toml","nim","crystal","julia","zig"];
+  const dashComment = ["lua","sql","haskell","elm","ada"];
+  const pctComment  = ["latex","tex","matlab","erlang"];
+
   let result = "";
   let i = 0;
   while (i < code.length) {
     const ch = code[i];
-    // Lua / SQL / Haskell double-dash comment
-    if (ch === "-" && code[i+1] === "-" && ["lua","sql","haskell"].includes(lang)) {
+
+    // -- or %% line comments
+    if (ch === "-" && code[i+1] === "-" && dashComment.includes(lang)) {
       const end = code.indexOf("\n", i);
       const line = end === -1 ? code.slice(i) : code.slice(i, end);
-      result += `<span style="color:#6a9955">${esc(line)}</span>`;
-      i = end === -1 ? code.length : end;
-      continue;
+      result += spanC("#6a9955", esc(line)); i = end === -1 ? code.length : end; continue;
     }
-    // Hash-style line comment
-    if (ch === "#" && ["python","ruby","bash","r","elixir","perl","coffeescript"].includes(lang)) {
+    if (ch === "%" && pctComment.includes(lang)) {
       const end = code.indexOf("\n", i);
-      const line = end === -1 ? code.slice(i) : code.slice(i, end);
-      result += `<span style="color:#6a9955">${esc(line)}</span>`;
-      i = end === -1 ? code.length : end;
-      continue;
+      result += spanC("#6a9955", esc(end === -1 ? code.slice(i) : code.slice(i, end)));
+      i = end === -1 ? code.length : end; continue;
     }
-    // Line comment
+    // # line comment
+    if (ch === "#" && hashComment.includes(lang)) {
+      const end = code.indexOf("\n", i);
+      result += spanC("#6a9955", esc(end === -1 ? code.slice(i) : code.slice(i, end)));
+      i = end === -1 ? code.length : end; continue;
+    }
+    // // line comment
     if (ch === "/" && code[i+1] === "/") {
       const end = code.indexOf("\n", i);
-      const line = end === -1 ? code.slice(i) : code.slice(i, end);
-      result += `<span style="color:#6a9955">${esc(line)}</span>`;
-      i = end === -1 ? code.length : end;
-      continue;
+      result += spanC("#6a9955", esc(end === -1 ? code.slice(i) : code.slice(i, end)));
+      i = end === -1 ? code.length : end; continue;
     }
-    // Block comment
+    // /* block comment */
     if (ch === "/" && code[i+1] === "*") {
       const end = code.indexOf("*/", i+2);
       const block = end === -1 ? code.slice(i) : code.slice(i, end+2);
-      result += `<span style="color:#6a9955">${esc(block)}</span>`;
-      i = end === -1 ? code.length : end+2;
-      continue;
+      result += spanC("#6a9955", esc(block)); i = end === -1 ? code.length : end+2; continue;
     }
-    // Double string
+
+    // Decorator / annotation: @word
+    if (ch === "@" && /[a-zA-Z_]/.test(code[i+1] ?? "")) {
+      let j = i+1;
+      while (j < code.length && /[\w.]/.test(code[j])) j++;
+      result += spanC("#d7ba7d", esc(code.slice(i, j))); i = j; continue;
+    }
+
+    // Strings
     if (ch === '"') {
       let j = i+1;
-      while (j < code.length && (code[j] !== '"' || code[j-1] === "\\")) j++;
-      result += `<span style="color:#ce9178">${esc(code.slice(i, j+1))}</span>`;
-      i = j+1; continue;
+      while (j < code.length) {
+        if (code[j] === "\\" ) { j += 2; continue; }
+        if (code[j] === '"') { j++; break; }
+        j++;
+      }
+      result += spanC("#ce9178", esc(code.slice(i, j))); i = j; continue;
     }
-    // Single string
     if (ch === "'") {
       let j = i+1;
-      while (j < code.length && (code[j] !== "'" || code[j-1] === "\\")) j++;
-      result += `<span style="color:#ce9178">${esc(code.slice(i, j+1))}</span>`;
-      i = j+1; continue;
+      while (j < code.length) {
+        if (code[j] === "\\") { j += 2; continue; }
+        if (code[j] === "'") { j++; break; }
+        j++;
+      }
+      result += spanC("#ce9178", esc(code.slice(i, j))); i = j; continue;
     }
-    // Template literal
     if (ch === "`") {
       let j = i+1;
-      while (j < code.length && (code[j] !== "`" || code[j-1] === "\\")) j++;
-      result += `<span style="color:#ce9178">${esc(code.slice(i, j+1))}</span>`;
-      i = j+1; continue;
+      while (j < code.length) {
+        if (code[j] === "\\") { j += 2; continue; }
+        if (code[j] === "`") { j++; break; }
+        j++;
+      }
+      result += spanC("#ce9178", esc(code.slice(i, j))); i = j; continue;
     }
-    // Number
+
+    // Numbers (hex, float, int)
     if (/\d/.test(ch) && (i === 0 || /\W/.test(code[i-1]))) {
       let j = i;
-      while (j < code.length && /[\d.xXa-fA-F_]/.test(code[j])) j++;
-      result += `<span style="color:#b5cea8">${esc(code.slice(i,j))}</span>`;
-      i = j; continue;
+      // hex
+      if (ch === "0" && (code[j+1] === "x" || code[j+1] === "X")) {
+        j += 2;
+        while (j < code.length && /[0-9a-fA-F_]/.test(code[j])) j++;
+      } else {
+        while (j < code.length && /[\d._]/.test(code[j])) j++;
+        if (j < code.length && (code[j] === "e" || code[j] === "E")) {
+          j++;
+          if (code[j] === "+" || code[j] === "-") j++;
+          while (j < code.length && /\d/.test(code[j])) j++;
+        }
+      }
+      // optional suffix like f, u, L, usize etc.
+      while (j < code.length && /[a-zA-Z]/.test(code[j])) j++;
+      result += spanC("#b5cea8", esc(code.slice(i, j))); i = j; continue;
     }
-    // Identifier
+
+    // Identifiers
     if (/[a-zA-Z_$]/.test(ch)) {
       let j = i;
       while (j < code.length && /[\w$]/.test(code[j])) j++;
       const word = code.slice(i, j);
+
+      // Check if preceded by a dot → property access
+      const prevNonWS = code.slice(0, i).trimEnd();
+      const afterDot = prevNonWS.endsWith(".");
+
       if (kws.includes(word)) {
-        result += `<span style="color:#569cd6">${esc(word)}</span>`;
-      } else if (/^[A-Z]/.test(word)) {
-        result += `<span style="color:#4ec9b0">${esc(word)}</span>`;
+        // Distinguish control flow (dimmer blue) from type keywords (lighter)
+        result += spanC("#569cd6", esc(word));
+      } else if (afterDot) {
+        // property / method access
+        if (j < code.length && code[j] === "(") {
+          result += spanC("#dcdcaa", esc(word));
+        } else {
+          result += spanC("#9cdcfe", esc(word));
+        }
+      } else if (/^[A-Z]/.test(word) && word.length > 1) {
+        // Type / class name
+        result += spanC("#4ec9b0", esc(word));
       } else if (j < code.length && code[j] === "(") {
-        result += `<span style="color:#dcdcaa">${esc(word)}</span>`;
+        // Function call
+        result += spanC("#dcdcaa", esc(word));
       } else {
         result += esc(word);
       }
       i = j; continue;
     }
+
+    // Operators (colorize common ones slightly)
+    if (ch === "=" || ch === "!" || ch === "<" || ch === ">" || ch === "&" || ch === "|" || ch === "?" || ch === ":" || ch === "+" || ch === "-" || ch === "*" || ch === "/" || ch === "%" || ch === "^" || ch === "~") {
+      let j = i;
+      // greedy multi-char ops
+      while (j < code.length && /[=!<>&|?:+\-*/%^~]/.test(code[j]) && !/[{}\[\]();,\s]/.test(code[j])) j++;
+      if (j === i) j++;
+      result += spanC("#d4d4d4", esc(code.slice(i, j))); i = j; continue;
+    }
+
     result += esc(ch);
     i++;
   }
@@ -968,42 +1202,43 @@ export default function VSCode({ onLaunchGame }: Props) {
     const parentEntry = files.find(f => f.id === realParentId);
     const depth = realParentId === null ? 0 : (parentEntry?.depth ?? 0) + 1;
 
-    const rawExt = name.includes(".") ? name.split(".").pop() ?? "" : "";
-    const ext = name.startsWith(".git") ? "git" : rawExt;
+    // If the file has no extension at all, default to .txt
+    const KNOWN_EXTS = new Set([
+      "ts","tsx","js","jsx","mjs","cjs","py","go","rs","rb","java","c","cpp","cc","cxx",
+      "cs","php","swift","kt","kts","dart","lua","r","scala","hs","lhs","ex","exs","erl",
+      "hrl","sh","bash","zsh","fish","html","htm","css","scss","sass","less","json","jsonc",
+      "json5","md","mdx","yaml","yml","toml","xml","svg","txt","sql","graphql","gql",
+      "prisma","proto","gitignore","gitattributes","log","env","tf","tfvars","astro","elm",
+      "clj","cljs","v","nix","ps1","psm1","bat","sol","tex","vue","svelte","gradle","jl",
+      "nim","zig","coffee","ml","mli","fs","fsx","lock","csv","pdf","png","jpg","jpeg",
+      "gif","webp","ico","dockerfile",
+    ]);
+
+    let finalName = name;
+    if (newItemType === "file" && !name.startsWith(".")) {
+      const dotIdx = name.lastIndexOf(".");
+      if (dotIdx === -1 || !KNOWN_EXTS.has(name.slice(dotIdx + 1).toLowerCase())) {
+        finalName = dotIdx === -1 ? name + ".txt" : name; // only append .txt if NO extension at all
+      }
+    }
+
+    const rawExt = finalName.includes(".") ? finalName.split(".").pop() ?? "" : "";
+    const ext = finalName.startsWith(".git") ? "git" : rawExt;
 
     const newEntry: FileEntry = {
-      id: `${name}-${Date.now()}`,
-      name,
+      id: `${finalName}-${Date.now()}`,
+      name: finalName,
       isFolder: newItemType === "folder",
       parentId: realParentId,
       depth,
-      lang:
-        newItemType === "file"
-          ? rawExt === "ts"
-            ? "typescript"
-            : rawExt === "tsx"
-            ? "typescriptreact"
-            : rawExt === "py"
-            ? "python"
-            : rawExt === "go"
-            ? "go"
-            : rawExt === "css"
-            ? "css"
-            : rawExt === "html"
-            ? "html"
-            : rawExt === "json"
-            ? "json"
-            : rawExt === "md"
-            ? "markdown"
-            : "plaintext"
-          : undefined,
+      lang: newItemType === "file" ? languageFromFileName(finalName) : undefined,
       ext: newItemType === "file" ? ext : undefined,
     };
 
     setFiles(f => [...f, newEntry]);
 
     if (newItemType === "file") {
-      setFileContents(c => ({ ...c, [name]: "" }));
+      setFileContents(c => ({ ...c, [finalName]: "" }));
       setTimeout(() => openFile(newEntry.id), 50);
     }
 
@@ -1529,7 +1764,25 @@ export default function VSCode({ onLaunchGame }: Props) {
                         const after = value.slice(end);
                         const currentLine = before.split("\n").pop() ?? "";
                         const indent = currentLine.match(/^\s*/)?.[0] ?? "";
-                        const extraIndent = /[\{\[\(]\s*$/.test(currentLine) ? "  " : "";
+                        const lang = activeFile.lang ?? languageFromFileName(activeFile.name);
+                        const colonLangs = ["python","ruby","elixir","coffeescript","dart","julia","nim","crystal"];
+
+                        // If cursor is between a matching bracket pair {|}, [|], (|)
+                        // → expand to three lines: indent+2, then closing bracket at same indent
+                        const charBefore = before[before.length - 1];
+                        const charAfter = after[0];
+                        const bracketClose: Record<string, string> = { "{": "}", "[": "]", "(": ")" };
+                        if (charBefore && bracketClose[charBefore] && charAfter === bracketClose[charBefore]) {
+                          const inner = "\n" + indent + "  ";
+                          const outer = "\n" + indent;
+                          updateCode(before + inner + outer + after, start + 1 + indent.length + 2);
+                          return;
+                        }
+
+                        const trimmedLine = currentLine.trimEnd();
+                        const endsWithOpenBracket = /[\{\[\(]$/.test(trimmedLine);
+                        const endsWithColon = colonLangs.includes(lang) && /:\s*$/.test(trimmedLine) && !/^\s*#/.test(currentLine);
+                        const extraIndent = (endsWithOpenBracket || endsWithColon) ? "  " : "";
 
                         updateCode(before + "\n" + indent + extraIndent + after, start + 1 + indent.length + extraIndent.length);
                         return;
