@@ -479,9 +479,13 @@ function highlightHTML(code: string): string {
       if (isClose) j++;
       // Tag name
       while (j < code.length && /[\w:-]/.test(code[j])) j++;
-      const tagName = code.slice(isClose ? i + 2 : i + 1, j);
+      const tagName = code.slice(isClose ? i + 2 : i + 1, j).toLowerCase();
       result += spanC("#808080", esc(isClose ? "</" : "<"));
       result += spanC("#4ec9b0", esc(tagName));
+
+      // Collect attribute names while parsing so we know if an attr is an event handler
+      let currentAttrName = "";
+
       // Attributes
       while (j < code.length && code[j] !== ">" && !(code[j] === "/" && code[j+1] === ">")) {
         // whitespace
@@ -490,6 +494,7 @@ function highlightHTML(code: string): string {
         let ak = j;
         while (ak < code.length && /[\w:.-]/.test(code[ak])) ak++;
         if (ak > j) {
+          currentAttrName = code.slice(j, ak).toLowerCase();
           result += spanC("#9cdcfe", esc(code.slice(j, ak)));
           j = ak;
           // = and value
@@ -500,7 +505,15 @@ function highlightHTML(code: string): string {
             if (q === '"' || q === "'") {
               let vk = j + 1;
               while (vk < code.length && code[vk] !== q) vk++;
-              result += spanC("#ce9178", esc(code.slice(j, vk + 1)));
+              const rawVal = code.slice(j + 1, vk);
+              // Event handler attributes → highlight value as JS
+              if (/^on[a-z]/.test(currentAttrName) && rawVal.trim()) {
+                result += spanC("#808080", esc(q));
+                result += highlight(rawVal, "javascript");
+                result += spanC("#808080", esc(q));
+              } else {
+                result += spanC("#ce9178", esc(code.slice(j, vk + 1)));
+              }
               j = vk + 1;
             }
           }
@@ -515,6 +528,26 @@ function highlightHTML(code: string): string {
       } else if (code[j] === ">") {
         result += spanC("#808080", "&gt;");
         j++;
+        // <script> block → highlight inner JS
+        if (tagName === "script" && !isClose) {
+          const closeTag = "</script>";
+          const endScript = code.toLowerCase().indexOf(closeTag, j);
+          if (endScript === -1) { result += esc(code.slice(j)); i = code.length; continue; }
+          const scriptContent = code.slice(j, endScript);
+          result += highlight(scriptContent, "javascript");
+          result += spanC("#808080", "&lt;/") + spanC("#4ec9b0", "script") + spanC("#808080", "&gt;");
+          j = endScript + closeTag.length;
+        }
+        // <style> block → highlight inner CSS
+        if (tagName === "style" && !isClose) {
+          const closeTag = "</style>";
+          const endStyle = code.toLowerCase().indexOf(closeTag, j);
+          if (endStyle === -1) { result += esc(code.slice(j)); i = code.length; continue; }
+          const styleContent = code.slice(j, endStyle);
+          result += highlightCSS(styleContent);
+          result += spanC("#808080", "&lt;/") + spanC("#4ec9b0", "style") + spanC("#808080", "&gt;");
+          j = endStyle + closeTag.length;
+        }
       }
       i = j;
       continue;
@@ -988,6 +1021,13 @@ export default function VSCode({ onLaunchGame }: Props) {
   const [selectedLang, setSelectedLang] = useState("Plain Text");
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [langFilter, setLangFilter] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
+  const [htmlPreviewOpen, setHtmlPreviewOpen] = useState(false);
+  // Editor settings
+  const [editorFontSize, setEditorFontSize] = useState(14);
+  const [editorWordWrap, setEditorWordWrap] = useState(false);
+  const [editorTabSize, setEditorTabSize] = useState(2);
+  const [autoSave, setAutoSave] = useState(false);
 
   // Extensions
   const [installedExts, setInstalledExts] = useState<Set<string>>(new Set());
@@ -1398,7 +1438,7 @@ export default function VSCode({ onLaunchGame }: Props) {
           ))}
           <div style={{ flex: 1 }} />
           <div title="Accounts" style={{ width: "48px", height: "48px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><SvgUser /></div>
-          <div title="Settings" style={{ width: "48px", height: "48px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><SvgSettings /></div>
+          <div title="Settings" onClick={() => setShowSettings(s => !s)} style={{ width: "48px", height: "48px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", borderLeft: showSettings ? "2px solid #007acc" : "2px solid transparent", background: showSettings ? "rgba(0,122,204,0.1)" : "transparent" }}><SvgSettings /></div>
         </div>
 
         {/* Sidebar */}
@@ -1640,7 +1680,19 @@ export default function VSCode({ onLaunchGame }: Props) {
             </div>
             {activeFile && (() => {
               const lang = activeFile.lang ?? languageFromFileName(activeFile.name);
-              const NON_RUN = ["html","css","scss","json","markdown","plaintext","xml","svg"];
+              // Preview button for HTML/SVG files
+              if (lang === "html" || lang === "xml") return (
+                <button
+                  onClick={() => setHtmlPreviewOpen(p => !p)}
+                  style={{ display: "flex", alignItems: "center", gap: "5px", margin: "auto 8px", padding: "4px 12px", background: htmlPreviewOpen ? "#007acc" : "#3c3c3c", border: "none", borderRadius: "4px", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer", flexShrink: 0, userSelect: "none" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = htmlPreviewOpen ? "#1a8ad4" : "#505050")}
+                  onMouseLeave={e => (e.currentTarget.style.background = htmlPreviewOpen ? "#007acc" : "#3c3c3c")}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="16" rx="2" stroke="#fff" strokeWidth="2"/><path d="M8 12l-3 3 3 3M16 12l3 3-3 3M12 6l-2 12" stroke="#fff" strokeWidth="2" strokeLinecap="round"/></svg>
+                  {htmlPreviewOpen ? "Hide Preview" : "Preview"}
+                </button>
+              );
+              const NON_RUN = ["css","scss","json","markdown","plaintext","svg"];
               if (NON_RUN.includes(lang)) return null;
               const ext = activeFile.ext ?? activeFile.name.split(".").pop() ?? "";
               const CMD: Record<string, string> = {
@@ -1687,8 +1739,71 @@ export default function VSCode({ onLaunchGame }: Props) {
 
           {/* Editor */}
           <div style={{ flex: 1, overflow: "hidden", position: "relative", minHeight: 0 }}>
+            {/* Settings Overlay */}
+            {showSettings && (
+              <div style={{ position: "absolute", inset: 0, zIndex: 50, background: "#1e1e1e", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px 8px", borderBottom: "1px solid #3c3c3c", flexShrink: 0 }}>
+                  <span style={{ fontSize: "16px", fontWeight: 600, color: "#cccccc" }}>Settings</span>
+                  <button onClick={() => setShowSettings(false)} style={{ background: "none", border: "none", color: "#858585", cursor: "pointer", fontSize: "18px", padding: "2px 6px" }}>✕</button>
+                </div>
+                <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: "20px", maxWidth: "700px" }}>
+                  {/* Font Size */}
+                  <div>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "#bbbcbd", letterSpacing: "1px", marginBottom: "8px" }}>EDITOR</div>
+                    <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "#cccccc", fontSize: "13px", padding: "6px 0", borderBottom: "1px solid #2d2d2d" }}>
+                      <span>Font Size</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <button onClick={() => setEditorFontSize(s => Math.max(8, s - 1))} style={{ background: "#3c3c3c", border: "1px solid #555", color: "#ccc", width: "24px", height: "24px", cursor: "pointer", borderRadius: "3px", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
+                        <span style={{ color: "#9cdcfe", minWidth: "28px", textAlign: "center" }}>{editorFontSize}px</span>
+                        <button onClick={() => setEditorFontSize(s => Math.min(30, s + 1))} style={{ background: "#3c3c3c", border: "1px solid #555", color: "#ccc", width: "24px", height: "24px", cursor: "pointer", borderRadius: "3px", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
+                      </div>
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "#cccccc", fontSize: "13px", padding: "6px 0", borderBottom: "1px solid #2d2d2d", cursor: "pointer" }}>
+                      <span>Word Wrap</span>
+                      <div onClick={() => setEditorWordWrap(w => !w)} style={{ width: "36px", height: "18px", borderRadius: "9px", background: editorWordWrap ? "#007acc" : "#555", position: "relative", cursor: "pointer", transition: "background .2s", flexShrink: 0 }}>
+                        <div style={{ position: "absolute", top: "2px", left: editorWordWrap ? "20px" : "2px", width: "14px", height: "14px", borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+                      </div>
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "#cccccc", fontSize: "13px", padding: "6px 0", borderBottom: "1px solid #2d2d2d" }}>
+                      <span>Tab Size</span>
+                      <select value={editorTabSize} onChange={e => setEditorTabSize(Number(e.target.value))} style={{ background: "#3c3c3c", border: "1px solid #555", color: "#ccc", padding: "2px 8px", borderRadius: "3px", cursor: "pointer" }}>
+                        {[2,4,8].map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "#cccccc", fontSize: "13px", padding: "6px 0", borderBottom: "1px solid #2d2d2d", cursor: "pointer" }}>
+                      <span>Auto Save</span>
+                      <div onClick={() => setAutoSave(a => !a)} style={{ width: "36px", height: "18px", borderRadius: "9px", background: autoSave ? "#007acc" : "#555", position: "relative", cursor: "pointer", transition: "background .2s", flexShrink: 0 }}>
+                        <div style={{ position: "absolute", top: "2px", left: autoSave ? "20px" : "2px", width: "14px", height: "14px", borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+                      </div>
+                    </label>
+                  </div>
+                  {/* Theme */}
+                  <div>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "#bbbcbd", letterSpacing: "1px", marginBottom: "8px" }}>APPEARANCE</div>
+                    <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "#cccccc", fontSize: "13px", padding: "6px 0", borderBottom: "1px solid #2d2d2d" }}>
+                      <span>Color Theme</span>
+                      <span style={{ color: "#9cdcfe" }}>Dark+ (default dark)</span>
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "#cccccc", fontSize: "13px", padding: "6px 0", borderBottom: "1px solid #2d2d2d" }}>
+                      <span>Font Family</span>
+                      <span style={{ color: "#9cdcfe", fontSize: "12px" }}>Cascadia Code, Fira Code, Consolas</span>
+                    </label>
+                  </div>
+                  {/* Terminal */}
+                  <div>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "#bbbcbd", letterSpacing: "1px", marginBottom: "8px" }}>TERMINAL</div>
+                    <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", color: "#cccccc", fontSize: "13px", padding: "6px 0", borderBottom: "1px solid #2d2d2d" }}>
+                      <span>Shell</span>
+                      <span style={{ color: "#9cdcfe" }}>codeforge@workspace</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
             {activeTab && activeFile ? (
-              <div style={{ display: "flex", height: "100%", overflow: "hidden", background: "#1e1e1e" }}>
+              <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
+                {/* Editor pane */}
+                <div style={{ display: "flex", flex: htmlPreviewOpen ? "0 0 50%" : 1, height: "100%", overflow: "hidden", background: "#1e1e1e", borderRight: htmlPreviewOpen ? "1px solid #3c3c3c" : "none" }}>
                 <div ref={lineNumRef} style={{ background: "#1e1e1e", color: "#858585", padding: "8px 0", textAlign: "right", userSelect: "none", fontSize: "13px", lineHeight: "1.6", minWidth: "50px", paddingRight: "16px", paddingLeft: "8px", fontFamily: "'Cascadia Code','Fira Code','Consolas',monospace", overflowY: "hidden", flexShrink: 0 }}>
                   {activeCode.split("\n").map((_, i) => (
                     <div key={i} style={{ color: i + 1 === cursorLine ? "#cccccc" : "#858585" }}>{i + 1}</div>
@@ -1703,11 +1818,11 @@ export default function VSCode({ onLaunchGame }: Props) {
                       margin: 0,
                       padding: "8px 8px 8px 0",
                       fontFamily: "'Cascadia Code','Fira Code','Consolas',monospace",
-                      fontSize: "14px",
+                      fontSize: `${editorFontSize}px`,
                       lineHeight: "1.6",
                       overflow: "hidden",
                       pointerEvents: "none",
-                      whiteSpace: "pre",
+                      whiteSpace: editorWordWrap ? "pre-wrap" : "pre",
                       color: "#d4d4d4",
                     }}
                     dangerouslySetInnerHTML={{
@@ -1870,12 +1985,12 @@ export default function VSCode({ onLaunchGame }: Props) {
                       outline: "none",
                       resize: "none",
                       fontFamily: "'Cascadia Code','Fira Code','Consolas',monospace",
-                      fontSize: "14px",
+                      fontSize: `${editorFontSize}px`,
                       lineHeight: "1.6",
                       padding: "8px 8px 8px 0",
-                      tabSize: 2,
+                      tabSize: editorTabSize,
                       overflowY: "auto",
-                      whiteSpace: "pre",
+                      whiteSpace: editorWordWrap ? "pre-wrap" : "pre",
                     }}
                     spellCheck={false}
                     autoCapitalize="off"
@@ -1883,6 +1998,23 @@ export default function VSCode({ onLaunchGame }: Props) {
                   />
                 </div>
               </div>
+              {/* HTML Preview pane */}
+              {htmlPreviewOpen && (
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#fff" }}>
+                  <div style={{ background: "#252526", padding: "4px 12px", fontSize: "11px", color: "#858585", borderBottom: "1px solid #3c3c3c", flexShrink: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#858585" strokeWidth="2"/></svg>
+                    Live Preview
+                  </div>
+                  <iframe
+                    key={activeTab}
+                    srcDoc={activeCode}
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
+                    style={{ flex: 1, border: "none", background: "#fff" }}
+                    title="HTML Preview"
+                  />
+                </div>
+              )}
+            </div>
             ) : (
               <div style={{ background: "#1e1e1e", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: "16px" }}>
                 <svg width="80" height="80" viewBox="0 0 100 100" fill="none">
