@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { GameVersion } from "../App";
+import { executeCode } from "../executor";
 
 interface Props { onLaunchGame: (v: GameVersion) => void; }
 
@@ -716,88 +717,19 @@ function languageFromFileName(name: string): string {
   return "plaintext";
 }
 
-// ─── Wandbox compiler map (free, no API key) ────────────────────────────────
-type WandboxSpec = { compiler: string; compilerOptionRaw?: string; options?: string };
-
-const WANDBOX_COMPILER: Record<string, WandboxSpec> = {
-  python:          { compiler: "cpython-3.12.3" },
-  javascript:      { compiler: "nodejs-20.11.0" },
-  javascriptreact: { compiler: "nodejs-20.11.0" },
-  typescript:      { compiler: "deno-1.44.4" },
-  typescriptreact: { compiler: "deno-1.44.4" },
-  go:              { compiler: "go-1.22.3" },
-  rust:            { compiler: "rust-1.78.0" },
-  c:               { compiler: "gcc-13.2.0", compilerOptionRaw: "-x c -std=c11 -Wall" },
-  cpp:             { compiler: "gcc-13.2.0", options: "warning", compilerOptionRaw: "-std=c++17" },
-  ruby:            { compiler: "ruby-3.3.1" },
-  php:             { compiler: "php-8.3.6" },
-  lua:             { compiler: "lua-5.4.6" },
-  haskell:         { compiler: "ghc-9.8.2" },
-  bash:            { compiler: "bash" },
-  perl:            { compiler: "perl-5.38.2" },
-  swift:           { compiler: "swift-5.10" },
-  elixir:          { compiler: "elixir-1.16.2" },
-  scala:           { compiler: "scala-3.4.1" },
-  erlang:          { compiler: "erlang-26.2.5" },
-  clojure:         { compiler: "clojure-1.11.3" },
-  coffeescript:    { compiler: "coffeescript-2.7.0" },
-};
-
 async function executeOnline(req: RunRequest): Promise<string> {
-  const spec = WANDBOX_COMPILER[req.language.toLowerCase()];
-  if (!spec) {
-    return [
-      `No execution runtime available for '${req.language}'.`,
-      `Supported: Python, JavaScript, TypeScript, Go, Rust, C, C++, Ruby, PHP, Lua, Haskell, Bash, Perl, Swift, Elixir, Scala, Erlang, Clojure.`,
-    ].join("\n");
-  }
   try {
-    const body: Record<string, string> = {
-      compiler: spec.compiler,
-      code: req.code,
-    };
-    if (spec.options) body.options = spec.options;
-    if (spec.compilerOptionRaw) body["compiler-option-raw"] = spec.compilerOptionRaw;
-
-    const res = await fetch("https://wandbox.org/api/compile.json", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      return `Compiler error ${res.status}: ${text.slice(0, 400)}`;
+    const result = await executeCode({ code: req.code, language: req.language });
+    const parts: string[] = [];
+    if (result.compileError) parts.push(result.compileError.trim());
+    if (result.stdout) parts.push(result.stdout.trim());
+    if (result.stderr && result.stderr !== result.compileError) parts.push(result.stderr.trim());
+    if (!parts.length) {
+      return result.exitCode === 0 ? "Process exited with code 0" : `Process exited with code ${result.exitCode}`;
     }
-
-    const data = await res.json() as {
-      status: string;
-      compiler_output?: string;
-      compiler_error?: string;
-      compiler_message?: string;
-      program_output?: string;
-      program_error?: string;
-      program_message?: string;
-    };
-
-    const compileErr = (data.compiler_error || "").trim();
-    const programOut = (data.program_output || data.program_message || "").trim();
-    const programErr = (data.program_error || "").trim();
-    const exitCode = Number(data.status ?? 0);
-
-    if (exitCode !== 0 && compileErr && !programOut) {
-      return compileErr;
-    }
-    const output = [programOut, programErr].filter(Boolean).join("\n").trim();
-    if (!output && compileErr) return compileErr;
-    if (!output) {
-      return exitCode === 0
-        ? "Process exited with code 0"
-        : `Process exited with code ${exitCode}`;
-    }
-    return compileErr ? `${compileErr}\n\n${output}` : output;
+    return parts.join("\n");
   } catch (err) {
-    return `Network error: ${err instanceof Error ? err.message : String(err)}`;
+    return `Error: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
 
