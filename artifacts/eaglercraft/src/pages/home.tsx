@@ -1127,6 +1127,30 @@ export default function VSCode({ onLaunchGame }: Props) {
   const [historyIdxes, setHistoryIdxes] = useState<Record<number, number>>({ 1: -1 });
   const termEndRef = useRef<HTMLDivElement>(null);
   const termInputRef = useRef<HTMLInputElement>(null);
+  const editorTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Resizable panel sizes
+  const [sidebarWidth, setSidebarWidth] = useState(260);
+  const [terminalHeight, setTerminalHeight] = useState(220);
+
+  const startSidebarResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX, startW = sidebarWidth;
+    const onMove = (ev: MouseEvent) => setSidebarWidth(Math.max(150, Math.min(600, startW + ev.clientX - startX)));
+    const onUp = () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [sidebarWidth]);
+
+  const startTermResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startY = e.clientY, startH = terminalHeight;
+    const onMove = (ev: MouseEvent) => setTerminalHeight(Math.max(80, Math.min(600, startH + startY - ev.clientY)));
+    const onUp = () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [terminalHeight]);
 
   useEffect(() => { termEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [termSessions, activeTermId]);
   useEffect(() => { if (searchOpen) setTimeout(() => searchInputRef.current?.focus(), 30); }, [searchOpen]);
@@ -1145,6 +1169,144 @@ export default function VSCode({ onLaunchGame }: Props) {
   }, [searchOpen]);
 
   const getFileContent = useCallback((name: string) => fileContents[name] ?? STARTER[name] ?? "", [fileContents]);
+
+  // ─── Save / Open helpers ────────────────────────────────────────────────────
+  const saveFile = useCallback(() => {
+    if (!activeTab) return;
+    const f = files.find(x => x.id === activeTab);
+    if (!f) return;
+    const content = getFileContent(f.id);
+    const blob = new Blob([content], { type: "text/plain" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = f.name; a.click();
+  }, [activeTab, files, getFileContent]);
+
+  const saveFileAs = useCallback(() => {
+    if (!activeTab) return;
+    const f = files.find(x => x.id === activeTab);
+    if (!f) return;
+    const name = prompt("Save as:", f.name);
+    if (!name) return;
+    const content = getFileContent(f.id);
+    const blob = new Blob([content], { type: "text/plain" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  }, [activeTab, files, getFileContent]);
+
+  const handleOpenFileFromDisk = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const text = ev.target?.result as string;
+      const ext = file.name.includes(".") ? file.name.split(".").pop() : undefined;
+      const langMap: Record<string, string> = { ts: "typescript", tsx: "typescriptreact", js: "javascript", py: "python", css: "css", html: "html", json: "json", md: "markdown" };
+      const id = `disk-${Date.now()}`;
+      const newEntry: FileEntry = { id, name: file.name, ext, isFolder: false, parentId: null, lang: ext ? langMap[ext] : "plaintext" };
+      setFiles(fs => [...fs, newEntry]);
+      setFileContents(c => ({ ...c, [id]: text }));
+      setOpenTabs(t => [...t, id]);
+      setActiveTab(id);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }, []);
+
+  // ─── Editor edit helpers ────────────────────────────────────────────────────
+  const editorExecCommand = useCallback((cmd: string) => {
+    const ta = editorTextareaRef.current; if (!ta) return;
+    ta.focus(); document.execCommand(cmd);
+  }, []);
+
+  const editorSelectAll = useCallback(() => {
+    const ta = editorTextareaRef.current; if (!ta) return;
+    ta.focus(); ta.select();
+  }, []);
+
+  const editorToggleComment = useCallback(() => {
+    if (!activeTab) return;
+    const f = files.find(x => x.id === activeTab); if (!f) return;
+    const ta = editorTextareaRef.current; if (!ta) return;
+    const val = ta.value;
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    const lineStart = val.lastIndexOf("\n", start - 1) + 1;
+    const lineEnd = val.indexOf("\n", end); const lineEndReal = lineEnd === -1 ? val.length : lineEnd;
+    const line = val.slice(lineStart, lineEndReal);
+    const commentMap: Record<string, string> = { typescript: "//", typescriptreact: "//", javascript: "//", python: "#", css: "/*", html: "<!--", go: "//", rust: "//" };
+    const prefix = commentMap[f.lang ?? ""] ?? "//";
+    const trimmed = line.trimStart();
+    let newLine: string;
+    if (trimmed.startsWith(prefix)) {
+      newLine = line.replace(prefix + " ", "").replace(prefix, "");
+    } else {
+      newLine = line.replace(/^(\s*)/, `$1${prefix} `);
+    }
+    const newVal = val.slice(0, lineStart) + newLine + val.slice(lineEndReal);
+    setFileContents(c => ({ ...c, [activeTab]: newVal }));
+  }, [activeTab, files]);
+
+  const editorGotoLine = useCallback(() => {
+    const input = prompt("Go to line:");
+    if (!input) return;
+    const line = parseInt(input, 10); if (isNaN(line)) return;
+    const ta = editorTextareaRef.current; if (!ta) return;
+    const lines = ta.value.split("\n");
+    const targetLine = Math.max(1, Math.min(line, lines.length));
+    const pos = lines.slice(0, targetLine - 1).join("\n").length + (targetLine > 1 ? 1 : 0);
+    ta.focus(); ta.setSelectionRange(pos, pos);
+    const lineH = 20.8;
+    ta.scrollTop = (targetLine - 5) * lineH;
+  }, []);
+
+  const editorCopyLineDown = useCallback(() => {
+    if (!activeTab) return;
+    const ta = editorTextareaRef.current; if (!ta) return;
+    const val = ta.value; const start = ta.selectionStart;
+    const lineStart = val.lastIndexOf("\n", start - 1) + 1;
+    const lineEnd = val.indexOf("\n", start); const lineEndReal = lineEnd === -1 ? val.length : lineEnd;
+    const line = val.slice(lineStart, lineEndReal);
+    const newVal = val.slice(0, lineEndReal) + "\n" + line + val.slice(lineEndReal);
+    setFileContents(c => ({ ...c, [activeTab]: newVal }));
+  }, [activeTab]);
+
+  const editorMoveLineUp = useCallback(() => {
+    if (!activeTab) return;
+    const ta = editorTextareaRef.current; if (!ta) return;
+    const val = ta.value; const start = ta.selectionStart;
+    const lineStart = val.lastIndexOf("\n", start - 1) + 1;
+    if (lineStart === 0) return;
+    const lineEnd = val.indexOf("\n", start); const lineEndReal = lineEnd === -1 ? val.length : lineEnd;
+    const prevLineStart = val.lastIndexOf("\n", lineStart - 2) + 1;
+    const curLine = val.slice(lineStart, lineEndReal);
+    const prevLine = val.slice(prevLineStart, lineStart - 1);
+    const newVal = val.slice(0, prevLineStart) + curLine + "\n" + prevLine + val.slice(lineEndReal);
+    setFileContents(c => ({ ...c, [activeTab]: newVal }));
+  }, [activeTab]);
+
+  const editorMoveLineDown = useCallback(() => {
+    if (!activeTab) return;
+    const ta = editorTextareaRef.current; if (!ta) return;
+    const val = ta.value; const start = ta.selectionStart;
+    const lineStart = val.lastIndexOf("\n", start - 1) + 1;
+    const lineEnd = val.indexOf("\n", start); if (lineEnd === -1) return;
+    const nextLineEnd = val.indexOf("\n", lineEnd + 1); const nextLineEndReal = nextLineEnd === -1 ? val.length : nextLineEnd;
+    const curLine = val.slice(lineStart, lineEnd);
+    const nextLine = val.slice(lineEnd + 1, nextLineEndReal);
+    const newVal = val.slice(0, lineStart) + nextLine + "\n" + curLine + val.slice(nextLineEndReal);
+    setFileContents(c => ({ ...c, [activeTab]: newVal }));
+  }, [activeTab]);
+
+  // ─── Global keyboard shortcuts ──────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key === "s") { e.preventDefault(); saveFile(); }
+      if (mod && e.key === "b") { e.preventDefault(); setSidebarOpen(s => !s); }
+      if (mod && e.key === "`") { e.preventDefault(); setTerminalOpen(t => !t); }
+      if (mod && e.key === "w") { e.preventDefault(); if (activeTab) closeTab(activeTab); }
+      if (mod && e.key === "/") { e.preventDefault(); editorToggleComment(); }
+      if (mod && e.key === "g" && !e.shiftKey) { e.preventDefault(); editorGotoLine(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [saveFile, activeTab, closeTab, editorToggleComment, editorGotoLine]);
 
   const openFile = useCallback((id: string) => {
     const f = files.find(x => x.id === id);
@@ -1406,6 +1568,9 @@ export default function VSCode({ onLaunchGame }: Props) {
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", width: "100vw", background: "#1e1e1e", color: "#cccccc", fontFamily: "'Segoe UI', system-ui, sans-serif", fontSize: "13px", overflow: "hidden" }}
       onClick={() => { setShowLangPicker(false); }}>
 
+      {/* Hidden file input for Open File */}
+      <input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={handleOpenFileFromDisk} />
+
       {/* ── Menu Bar ── */}
       <MenuBar
         searchBarRef={searchBarRef}
@@ -1418,10 +1583,37 @@ export default function VSCode({ onLaunchGame }: Props) {
         searchResults={searchDropdownFiles}
         onOpenFile={id => { openFile(id); setSearchOpen(false); setSearchValue(""); }}
         onToggleSidebar={() => setSidebarOpen(s => !s)}
-        onToggleTerminal={() => setTerminalOpen(t => !t)}
+        onToggleTerminal={() => { setTerminalOpen(t => !t); }}
         onNewFile={() => startNewItem("file")}
         onNewFolder={() => startNewItem("folder")}
-        onSave={() => {}}
+        onSave={saveFile}
+        onSaveAs={saveFileAs}
+        onOpenFileDisk={() => fileInputRef.current?.click()}
+        onCloseEditor={() => { if (activeTab) closeTab(activeTab); }}
+        onUndo={() => editorExecCommand("undo")}
+        onRedo={() => editorExecCommand("redo")}
+        onCut={() => editorExecCommand("cut")}
+        onCopy={() => editorExecCommand("copy")}
+        onPaste={() => { editorTextareaRef.current?.focus(); }}
+        onSelectAll={editorSelectAll}
+        onToggleComment={editorToggleComment}
+        onCopyLineDown={editorCopyLineDown}
+        onMoveLineUp={editorMoveLineUp}
+        onMoveLineDown={editorMoveLineDown}
+        onGotoLine={editorGotoLine}
+        onZoomIn={() => setEditorFontSize(s => Math.min(30, s + 1))}
+        onZoomOut={() => setEditorFontSize(s => Math.max(8, s - 1))}
+        onZoomReset={() => setEditorFontSize(14)}
+        onToggleWordWrap={() => setEditorWordWrap(w => !w)}
+        onSwitchActivity={(act) => { setActiveActivity(act); setSidebarOpen(true); }}
+        onRunFile={() => { setTerminalOpen(true); document.getElementById("run-btn")?.click(); }}
+        onNewTerminal={() => { setTerminalOpen(true); newTerminal(); }}
+        onClearTerminal={() => setTermSessions(ss => ss.map(s => s.id === activeTermId ? { ...s, lines: [] } : s))}
+        onAbout={() => alert("CodeForge v1.0.0\nA VSCode-style editor built with React.\n\n© 2025 CodeForge")}
+        onToggleDevTools={() => { console.log("CodeForge DevTools — check the browser console."); (window as any).__CODEFORGE_DEBUG__ = true; }}
+        editorWordWrap={editorWordWrap}
+        sidebarOpen={sidebarOpen}
+        terminalOpen={terminalOpen}
       />
 
       {/* ── Body ── */}
@@ -1431,9 +1623,12 @@ export default function VSCode({ onLaunchGame }: Props) {
         <div style={{ width: "48px", background: "#333333", display: "flex", flexDirection: "column", alignItems: "center", paddingTop: "4px", borderRight: "1px solid #252526", flexShrink: 0 }}>
           {(["explorer","search","git","debug","extensions"] as const).map(act => (
             <div key={act} title={act.charAt(0).toUpperCase() + act.slice(1)}
-              onClick={() => { setActiveActivity(act); setSidebarOpen(true); }}
-              style={{ width: "48px", height: "48px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", borderLeft: activeActivity === act ? "2px solid #007acc" : "2px solid transparent" }}>
-              {ACT[act](activeActivity === act)}
+              onClick={() => {
+                if (activeActivity === act && sidebarOpen) { setSidebarOpen(false); }
+                else { setActiveActivity(act); setSidebarOpen(true); }
+              }}
+              style={{ width: "48px", height: "48px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", borderLeft: activeActivity === act && sidebarOpen ? "2px solid #007acc" : "2px solid transparent" }}>
+              {ACT[act](activeActivity === act && sidebarOpen)}
             </div>
           ))}
           <div style={{ flex: 1 }} />
@@ -1443,7 +1638,7 @@ export default function VSCode({ onLaunchGame }: Props) {
 
         {/* Sidebar */}
         {sidebarOpen && (
-          <div style={{ width: "260px", background: "#252526", borderRight: "1px solid #1e1e1e", display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0 }}>
+          <div style={{ width: sidebarWidth + "px", background: "#252526", borderRight: "none", display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0, position: "relative" }}>
 
             {/* EXPLORER */}
             {activeActivity === "explorer" && (
@@ -1653,6 +1848,14 @@ export default function VSCode({ onLaunchGame }: Props) {
           </div>
         )}
 
+        {/* Sidebar resize handle */}
+        {sidebarOpen && (
+          <div onMouseDown={startSidebarResize}
+            style={{ width: "4px", cursor: "ew-resize", background: "transparent", flexShrink: 0, zIndex: 10, borderRight: "1px solid #1e1e1e" }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#007acc")}
+            onMouseLeave={e => (e.currentTarget.style.background = "transparent")} />
+        )}
+
         {/* Editor + Terminal */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
 
@@ -1831,6 +2034,7 @@ export default function VSCode({ onLaunchGame }: Props) {
                   />
 
                   <textarea
+                    ref={editorTextareaRef}
                     value={activeCode}
                     onChange={e => {
                       const next = e.target.value;
@@ -2032,7 +2236,12 @@ export default function VSCode({ onLaunchGame }: Props) {
 
           {/* Terminal */}
           {terminalOpen && (
-            <div style={{ height: "220px", borderTop: "1px solid #454545", display: "flex", flexDirection: "column", flexShrink: 0, background: "#1e1e1e" }}>
+            <div style={{ height: terminalHeight + "px", borderTop: "1px solid #454545", display: "flex", flexDirection: "column", flexShrink: 0, background: "#1e1e1e" }}>
+              {/* Resize handle at top of terminal */}
+              <div onMouseDown={startTermResize}
+                style={{ height: "4px", cursor: "ns-resize", background: "transparent", flexShrink: 0, zIndex: 10 }}
+                onMouseEnter={e => (e.currentTarget.style.background = "#007acc")}
+                onMouseLeave={e => (e.currentTarget.style.background = "transparent")} />
               <div style={{ display: "flex", alignItems: "center", background: "#252526", height: "32px", borderBottom: "1px solid #454545", flexShrink: 0 }}>
                 {(["TERMINAL","PROBLEMS","OUTPUT","DEBUG CONSOLE"] as const).map(tab => (
                   <div key={tab} style={{ padding: "0 14px", height: "32px", display: "flex", alignItems: "center", fontSize: "11px", cursor: "pointer", color: tab === "TERMINAL" ? "#cccccc" : "#858585", borderBottom: tab === "TERMINAL" ? "1px solid #007acc" : "1px solid transparent" }}
@@ -2041,13 +2250,16 @@ export default function VSCode({ onLaunchGame }: Props) {
                     {tab}
                   </div>
                 ))}
-                <div style={{ display: "flex", marginLeft: "4px", gap: "2px" }}>
-                  {termSessions.map(s => (
+                <div style={{ flex: 1 }} />
+                {/* Terminal session tabs on right side */}
+                <div style={{ display: "flex", gap: "2px", padding: "0 4px", borderLeft: "1px solid #454545" }}>
+                  {termSessions.map((s, i) => (
                     <div key={s.id} onClick={() => setActiveTermId(s.id)}
-                      style={{ display: "flex", alignItems: "center", gap: "4px", padding: "0 8px", height: "24px", background: activeTermId === s.id ? "#3c3c3c" : "transparent", borderRadius: "3px", cursor: "pointer", fontSize: "11px", color: "#cccccc" }}>
-                      bash
+                      style={{ display: "flex", alignItems: "center", gap: "4px", padding: "0 8px", height: "26px", background: activeTermId === s.id ? "#3c3c3c" : "transparent", borderRadius: "3px", cursor: "pointer", fontSize: "11px", color: "#cccccc", border: activeTermId === s.id ? "1px solid #555" : "1px solid transparent" }}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="#4ec9b0" strokeWidth="2"/><path d="M8 12l4-4 4 4" stroke="#4ec9b0" strokeWidth="1.5"/></svg>
+                      bash {i + 1}
                       <span onClick={e => { e.stopPropagation(); closeTermSession(s.id); }}
-                        style={{ display: "flex", alignItems: "center", padding: "1px" }}
+                        style={{ display: "flex", alignItems: "center", padding: "1px", borderRadius: "2px" }}
                         onMouseEnter={e => (e.currentTarget.style.background = "#555")}
                         onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
                         {SvgClose()}
@@ -2055,12 +2267,12 @@ export default function VSCode({ onLaunchGame }: Props) {
                     </div>
                   ))}
                 </div>
-                <div style={{ flex: 1 }} />
-                <div style={{ display: "flex", padding: "0 8px", gap: "2px" }}>
+                <div style={{ display: "flex", padding: "0 8px", gap: "2px", borderLeft: "1px solid #454545" }}>
                   <IBtn title="New Terminal" onClick={newTerminal}><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="#cccccc" strokeWidth="2"/><line x1="5" y1="12" x2="19" y2="12" stroke="#cccccc" strokeWidth="2"/></svg></IBtn>
                   <IBtn title="Split Terminal" onClick={newTerminal}><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="1" stroke="#cccccc" strokeWidth="2"/><line x1="12" y1="3" x2="12" y2="21" stroke="#cccccc" strokeWidth="2"/></svg></IBtn>
-                  <IBtn title="Clear" onClick={() => setTermSessions(ss => ss.map(s => s.id === activeTermId ? { ...s, lines: [] } : s))}><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6" stroke="#cccccc" strokeWidth="2"/></svg></IBtn>
-                  <IBtn title="Close" onClick={() => setTerminalOpen(false)}>{SvgClose()}</IBtn>
+                  <IBtn title="Clear Terminal" onClick={() => setTermSessions(ss => ss.map(s => s.id === activeTermId ? { ...s, lines: [] } : s))}><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6" stroke="#cccccc" strokeWidth="2"/></svg></IBtn>
+                  <IBtn title="Kill Terminal" onClick={() => closeTermSession(activeTermId)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><line x1="18" y1="6" x2="6" y2="18" stroke="#cccccc" strokeWidth="2"/><line x1="6" y1="6" x2="18" y2="18" stroke="#cccccc" strokeWidth="2"/></svg></IBtn>
+                  <IBtn title="Close Panel" onClick={() => setTerminalOpen(false)}>{SvgClose()}</IBtn>
                 </div>
               </div>
               <div onClick={() => termInputRef.current?.focus()}
@@ -2203,7 +2415,7 @@ function ExtCard({ ext, installed, installing, onInstall }: { ext: typeof ALL_EX
 }
 
 // ─── Menu Bar ────────────────────────────────────────────────────────────────
-function MenuBar({ searchBarRef, searchOpen, searchValue, searchInputRef, onSearchClick, onSearchChange, onSearchKey, searchResults, onOpenFile, onToggleSidebar, onToggleTerminal, onNewFile, onNewFolder, onSave }: {
+function MenuBar({ searchBarRef, searchOpen, searchValue, searchInputRef, onSearchClick, onSearchChange, onSearchKey, searchResults, onOpenFile, onToggleSidebar, onToggleTerminal, onNewFile, onNewFolder, onSave, onSaveAs, onOpenFileDisk, onCloseEditor, onUndo, onRedo, onCut, onCopy, onPaste, onSelectAll, onToggleComment, onCopyLineDown, onMoveLineUp, onMoveLineDown, onGotoLine, onZoomIn, onZoomOut, onZoomReset, onToggleWordWrap, onSwitchActivity, onRunFile, onNewTerminal, onClearTerminal, onAbout, onToggleDevTools, editorWordWrap, sidebarOpen, terminalOpen }: {
   searchBarRef: React.RefObject<HTMLDivElement | null>;
   searchOpen: boolean; searchValue: string;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
@@ -2212,77 +2424,98 @@ function MenuBar({ searchBarRef, searchOpen, searchValue, searchInputRef, onSear
   searchResults: FileEntry[];
   onOpenFile: (id: string) => void;
   onToggleSidebar: () => void; onToggleTerminal: () => void;
-  onNewFile: () => void; onNewFolder: () => void; onSave: () => void;
+  onNewFile: () => void; onNewFolder: () => void;
+  onSave: () => void; onSaveAs: () => void; onOpenFileDisk: () => void; onCloseEditor: () => void;
+  onUndo: () => void; onRedo: () => void; onCut: () => void; onCopy: () => void; onPaste: () => void; onSelectAll: () => void;
+  onToggleComment: () => void; onCopyLineDown: () => void; onMoveLineUp: () => void; onMoveLineDown: () => void; onGotoLine: () => void;
+  onZoomIn: () => void; onZoomOut: () => void; onZoomReset: () => void; onToggleWordWrap: () => void;
+  onSwitchActivity: (act: "explorer"|"search"|"git"|"debug"|"extensions") => void;
+  onRunFile: () => void; onNewTerminal: () => void; onClearTerminal: () => void;
+  onAbout: () => void; onToggleDevTools: () => void;
+  editorWordWrap: boolean; sidebarOpen: boolean; terminalOpen: boolean;
 }) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const menus: Record<string, { label: string; action?: () => void; divider?: boolean; shortcut?: string }[]> = {
+  const close = () => setOpenMenu(null);
+
+  const menus: Record<string, { label: string; action?: () => void; divider?: boolean; shortcut?: string; checked?: boolean }[]> = {
     File: [
       { label: "New File", action: onNewFile, shortcut: "Ctrl+N" },
       { label: "New Folder", action: onNewFolder },
       { divider: true, label: "" },
-      { label: "Open File...", shortcut: "Ctrl+O" },
-      { label: "Open Folder...", shortcut: "Ctrl+K Ctrl+O" },
+      { label: "Open File...", action: onOpenFileDisk, shortcut: "Ctrl+O" },
       { divider: true, label: "" },
       { label: "Save", action: onSave, shortcut: "Ctrl+S" },
-      { label: "Save As...", shortcut: "Ctrl+Shift+S" },
+      { label: "Save As...", action: onSaveAs, shortcut: "Ctrl+Shift+S" },
       { divider: true, label: "" },
-      { label: "Close Editor", shortcut: "Ctrl+W" },
+      { label: "Close Editor", action: onCloseEditor, shortcut: "Ctrl+W" },
     ],
     Edit: [
-      { label: "Undo", shortcut: "Ctrl+Z" }, { label: "Redo", shortcut: "Ctrl+Y" },
+      { label: "Undo", action: onUndo, shortcut: "Ctrl+Z" },
+      { label: "Redo", action: onRedo, shortcut: "Ctrl+Y" },
       { divider: true, label: "" },
-      { label: "Cut", shortcut: "Ctrl+X" }, { label: "Copy", shortcut: "Ctrl+C" }, { label: "Paste", shortcut: "Ctrl+V" },
+      { label: "Cut", action: onCut, shortcut: "Ctrl+X" },
+      { label: "Copy", action: onCopy, shortcut: "Ctrl+C" },
+      { label: "Paste", action: onPaste, shortcut: "Ctrl+V" },
       { divider: true, label: "" },
       { label: "Find...", action: onSearchClick, shortcut: "Ctrl+P" },
-      { label: "Replace...", shortcut: "Ctrl+H" },
       { divider: true, label: "" },
-      { label: "Toggle Line Comment", shortcut: "Ctrl+/" },
-      { label: "Format Document", shortcut: "Shift+Alt+F" },
+      { label: "Toggle Line Comment", action: onToggleComment, shortcut: "Ctrl+/" },
+      { label: "Copy Line Down", action: onCopyLineDown, shortcut: "Shift+Alt+Down" },
     ],
     Selection: [
-      { label: "Select All", shortcut: "Ctrl+A" }, { label: "Expand Selection" }, { label: "Shrink Selection" },
+      { label: "Select All", action: onSelectAll, shortcut: "Ctrl+A" },
       { divider: true, label: "" },
-      { label: "Copy Line Up", shortcut: "Shift+Alt+Up" }, { label: "Copy Line Down", shortcut: "Shift+Alt+Down" },
-      { label: "Move Line Up", shortcut: "Alt+Up" }, { label: "Move Line Down", shortcut: "Alt+Down" },
+      { label: "Copy Line Down", action: onCopyLineDown, shortcut: "Shift+Alt+Down" },
+      { label: "Move Line Up", action: onMoveLineUp, shortcut: "Alt+Up" },
+      { label: "Move Line Down", action: onMoveLineDown, shortcut: "Alt+Down" },
     ],
     View: [
       { label: "Command Palette...", action: onSearchClick, shortcut: "Ctrl+Shift+P" },
       { divider: true, label: "" },
-      { label: "Explorer", action: onToggleSidebar, shortcut: "Ctrl+Shift+E" },
-      { label: "Search", action: onToggleSidebar, shortcut: "Ctrl+Shift+F" },
-      { label: "Source Control", action: onToggleSidebar, shortcut: "Ctrl+Shift+G" },
-      { label: "Extensions", action: onToggleSidebar, shortcut: "Ctrl+Shift+X" },
+      { label: "Explorer", action: () => onSwitchActivity("explorer"), shortcut: "Ctrl+Shift+E" },
+      { label: "Search", action: () => onSwitchActivity("search"), shortcut: "Ctrl+Shift+F" },
+      { label: "Source Control", action: () => onSwitchActivity("git"), shortcut: "Ctrl+Shift+G" },
+      { label: "Extensions", action: () => onSwitchActivity("extensions"), shortcut: "Ctrl+Shift+X" },
       { divider: true, label: "" },
-      { label: "Terminal", action: onToggleTerminal, shortcut: "Ctrl+`" },
+      { label: "Terminal", action: onToggleTerminal, shortcut: "Ctrl+`", checked: terminalOpen },
       { divider: true, label: "" },
-      { label: "Toggle Sidebar", action: onToggleSidebar, shortcut: "Ctrl+B" },
+      { label: "Toggle Sidebar", action: onToggleSidebar, shortcut: "Ctrl+B", checked: sidebarOpen },
+      { label: "Word Wrap", action: onToggleWordWrap, shortcut: "Alt+Z", checked: editorWordWrap },
+      { divider: true, label: "" },
+      { label: "Zoom In", action: onZoomIn, shortcut: "Ctrl+=" },
+      { label: "Zoom Out", action: onZoomOut, shortcut: "Ctrl+-" },
+      { label: "Reset Zoom", action: onZoomReset, shortcut: "Ctrl+0" },
     ],
     Go: [
-      { label: "Back", shortcut: "Alt+Left" }, { label: "Forward", shortcut: "Alt+Right" },
-      { divider: true, label: "" },
       { label: "Go to File...", action: onSearchClick, shortcut: "Ctrl+P" },
-      { label: "Go to Line/Column...", shortcut: "Ctrl+G" },
-      { label: "Go to Definition", shortcut: "F12" },
+      { label: "Go to Line/Column...", action: onGotoLine, shortcut: "Ctrl+G" },
+      { divider: true, label: "" },
+      { label: "Go to Symbol...", action: onSearchClick, shortcut: "Ctrl+Shift+O" },
     ],
     Run: [
-      { label: "Start Debugging", shortcut: "F5" },
-      { label: "Run Without Debugging", shortcut: "Ctrl+F5" },
-      { label: "Stop Debugging", shortcut: "Shift+F5" },
+      { label: "Run Active File", action: onRunFile, shortcut: "Ctrl+F5" },
+      { label: "Run in Terminal", action: () => { onNewTerminal(); setTimeout(onRunFile, 100); }, shortcut: "F5" },
       { divider: true, label: "" },
-      { label: "Toggle Breakpoint", shortcut: "F9" },
+      { label: "Clear Terminal Output", action: onClearTerminal },
     ],
     Terminal: [
-      { label: "New Terminal", action: onToggleTerminal, shortcut: "Ctrl+Shift+`" },
-      { label: "Split Terminal" },
+      { label: "New Terminal", action: onNewTerminal, shortcut: "Ctrl+Shift+`" },
+      { label: "Split Terminal", action: onNewTerminal },
       { divider: true, label: "" },
-      { label: "Run Active File" }, { label: "Run Selected Text" },
+      { label: "Run Active File", action: onRunFile },
+      { label: "Clear Terminal", action: onClearTerminal },
+      { divider: true, label: "" },
+      { label: "Toggle Terminal Panel", action: onToggleTerminal, shortcut: "Ctrl+`", checked: terminalOpen },
     ],
     Help: [
       { label: "Show All Commands", action: onSearchClick, shortcut: "Ctrl+Shift+P" },
-      { label: "Documentation" }, { label: "Release Notes" },
       { divider: true, label: "" },
-      { label: "Toggle Developer Tools" }, { label: "About" },
+      { label: "Toggle Developer Tools", action: onToggleDevTools, shortcut: "F12" },
+      { divider: true, label: "" },
+      { label: "About CodeForge", action: onAbout },
     ],
   };
 
