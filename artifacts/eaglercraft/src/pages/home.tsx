@@ -1758,6 +1758,18 @@ export default function VSCode({ onLaunchGame }: Props) {
                         return;
                       }
 
+                      if (e.key === "Backspace" && start === end && start >= 2) {
+                        const before = value.slice(0, start);
+                        const lineStart = before.lastIndexOf("\n") + 1;
+                        const linePrefix = before.slice(lineStart);
+                        if (/^ +$/.test(linePrefix) && linePrefix.length >= 2) {
+                          e.preventDefault();
+                          const deleteCount = linePrefix.length % 2 === 0 ? 2 : 1;
+                          updateCode(value.slice(0, start - deleteCount) + value.slice(start), start - deleteCount);
+                          return;
+                        }
+                      }
+
                       if (e.key === "Enter") {
                         e.preventDefault();
 
@@ -1774,6 +1786,14 @@ export default function VSCode({ onLaunchGame }: Props) {
                         const charAfter = after[0];
                         const bracketClose: Record<string, string> = { "{": "}", "[": "]", "(": ")" };
                         if (charBefore && bracketClose[charBefore] && charAfter === bracketClose[charBefore]) {
+                          const inner = "\n" + indent + "  ";
+                          const outer = "\n" + indent;
+                          updateCode(before + inner + outer + after, start + 1 + indent.length + 2);
+                          return;
+                        }
+
+                        // HTML: cursor between ></tag> → expand to 3 lines
+                        if (charBefore === ">" && after.startsWith("</")) {
                           const inner = "\n" + indent + "  ";
                           const outer = "\n" + indent;
                           updateCode(before + inner + outer + after, start + 1 + indent.length + 2);
