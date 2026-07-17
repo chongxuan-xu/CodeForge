@@ -7,9 +7,10 @@ export type GameVersion = "1.5.2" | "1.8.8" | "1.12.2" | null;
 export default function App() {
   const [gameVersion, setGameVersion] = useState<GameVersion>(null);
 
-  if (gameVersion) {
-    return <Play version={gameVersion} onBack={() => setGameVersion(null)} />;
-  }
-
-  return <VSCode onLaunchGame={(v) => setGameVersion(v)} />;
+  return (
+    <>
+      <VSCode onLaunchGame={(v) => setGameVersion(v)} />
+      {gameVersion && <Play version={gameVersion} onBack={() => setGameVersion(null)} />}
+    </>
+  );
 }
