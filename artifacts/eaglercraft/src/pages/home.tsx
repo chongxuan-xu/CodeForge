@@ -1910,7 +1910,6 @@ export default function VSCode({ onLaunchGame }: Props) {
               const fullCmd = base === "go run" ? `go run ${activeFile.name}` : `${base} ${activeFile.name}`;
               return (
                 <button
-                  id="run-btn"
                   title={`Run: ${fullCmd}`}
                   onClick={() => {
                     setTerminalOpen(true);
@@ -2524,9 +2523,9 @@ function MenuBar({ searchBarRef, searchOpen, searchValue, searchInputRef, onSear
     <div style={{ background: "#3c3c3c", display: "flex", alignItems: "center", height: "30px", flexShrink: 0, userSelect: "none", zIndex: 200, position: "relative" }}>
       {/* Traffic lights */}
       <div style={{ width: "70px", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", flexShrink: 0 }}>
-        <div title="Close" onClick={() => { if (document.fullscreenElement) document.exitFullscreen(); else { const el = document.documentElement; if (el.requestFullscreen) el.requestFullscreen(); } }} style={{ width: "12px", height: "12px", borderRadius: "50%", background: "#ff5f57", cursor: "pointer" }} onMouseEnter={e => (e.currentTarget.style.opacity = "0.7")} onMouseLeave={e => (e.currentTarget.style.opacity = "1")} />
-        <div title="Minimize sidebar" onClick={() => { close(); document.dispatchEvent(new KeyboardEvent("keydown", { key: "b", ctrlKey: true, bubbles: true })); }} style={{ width: "12px", height: "12px", borderRadius: "50%", background: "#ffbd2e", cursor: "pointer" }} onMouseEnter={e => (e.currentTarget.style.opacity = "0.7")} onMouseLeave={e => (e.currentTarget.style.opacity = "1")} />
-        <div title="Fullscreen" onClick={() => { close(); const el = document.documentElement; if (document.fullscreenElement) document.exitFullscreen(); else el.requestFullscreen?.(); setIsFullscreen(f => !f); }} style={{ width: "12px", height: "12px", borderRadius: "50%", background: "#28c840", cursor: "pointer" }} onMouseEnter={e => (e.currentTarget.style.opacity = "0.7")} onMouseLeave={e => (e.currentTarget.style.opacity = "1")} />
+        <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: "#ff5f57", cursor: "pointer" }} />
+        <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: "#ffbd2e", cursor: "pointer" }} />
+        <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: "#28c840", cursor: "pointer" }} />
       </div>
       {/* Menus */}
       {Object.entries(menus).map(([name, items]) => (
@@ -2544,12 +2543,9 @@ function MenuBar({ searchBarRef, searchOpen, searchValue, searchInputRef, onSear
                   ? <div key={idx} style={{ borderTop: "1px solid #454545", margin: "4px 0" }} />
                   : (
                     <div key={idx} onClick={() => { setOpenMenu(null); item.action?.(); }}
-                      style={{ padding: "5px 12px 5px 28px", cursor: "pointer", color: "#cccccc", fontSize: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", position: "relative" }}
+                      style={{ padding: "5px 20px", cursor: "pointer", color: "#cccccc", fontSize: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px" }}
                       onMouseEnter={e => (e.currentTarget.style.background = "#094771")}
                       onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                      {item.checked !== undefined && (
-                        <span style={{ position: "absolute", left: "8px", color: item.checked ? "#007acc" : "transparent", fontSize: "13px" }}>✓</span>
-                      )}
                       <span>{item.label}</span>
                       {item.shortcut && <span style={{ color: "#858585", fontSize: "11px", whiteSpace: "nowrap" }}>{item.shortcut}</span>}
                     </div>
