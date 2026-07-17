@@ -1883,21 +1883,26 @@ export default function VSCode({ onLaunchGame }: Props) {
             </div>
             {activeFile && (() => {
               const lang = activeFile.lang ?? languageFromFileName(activeFile.name);
-              // Preview button for HTML/SVG files
-              if (lang === "html" || lang === "xml") return (
-                <button
-                  onClick={() => setHtmlPreviewOpen(p => !p)}
-                  style={{ display: "flex", alignItems: "center", gap: "5px", margin: "auto 8px", padding: "4px 12px", background: htmlPreviewOpen ? "#007acc" : "#3c3c3c", border: "none", borderRadius: "4px", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer", flexShrink: 0, userSelect: "none" }}
-                  onMouseEnter={e => (e.currentTarget.style.background = htmlPreviewOpen ? "#1a8ad4" : "#505050")}
-                  onMouseLeave={e => (e.currentTarget.style.background = htmlPreviewOpen ? "#007acc" : "#3c3c3c")}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="16" rx="2" stroke="#fff" strokeWidth="2"/><path d="M8 12l-3 3 3 3M16 12l3 3-3 3M12 6l-2 12" stroke="#fff" strokeWidth="2" strokeLinecap="round"/></svg>
-                  {htmlPreviewOpen ? "Hide Preview" : "Preview"}
-                </button>
-              );
-              const NON_RUN = ["css","scss","json","markdown","plaintext","svg"];
+              const ext = (activeFile.ext ?? activeFile.name.split(".").pop() ?? "").toLowerCase();
+              const PREVIEW_LANGS = ["html","xml","markdown","svg","json","csv"];
+              const IMAGE_EXTS = ["png","jpg","jpeg","gif","webp","bmp","svg"];
+              const hasPreview = PREVIEW_LANGS.includes(lang) || IMAGE_EXTS.includes(ext);
+              if (hasPreview) {
+                const previewLabel = lang === "markdown" ? "Rendered" : lang === "json" ? "Formatted" : lang === "csv" ? "Table" : lang === "svg" || ext === "svg" ? "Rendered" : IMAGE_EXTS.includes(ext) ? "Image" : "Preview";
+                return (
+                  <button
+                    onClick={() => setHtmlPreviewOpen(p => !p)}
+                    style={{ display: "flex", alignItems: "center", gap: "5px", margin: "auto 8px", padding: "4px 12px", background: htmlPreviewOpen ? "#007acc" : "#3c3c3c", border: "none", borderRadius: "4px", color: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer", flexShrink: 0, userSelect: "none" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = htmlPreviewOpen ? "#1a8ad4" : "#505050")}
+                    onMouseLeave={e => (e.currentTarget.style.background = htmlPreviewOpen ? "#007acc" : "#3c3c3c")}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="16" rx="2" stroke="#fff" strokeWidth="2"/><path d="M8 12l-3 3 3 3M16 12l3 3-3 3M12 6l-2 12" stroke="#fff" strokeWidth="2" strokeLinecap="round"/></svg>
+                    {htmlPreviewOpen ? `Hide ${previewLabel}` : previewLabel}
+                  </button>
+                );
+              }
+              const NON_RUN = ["css","scss","plaintext"];
               if (NON_RUN.includes(lang)) return null;
-              const ext = activeFile.ext ?? activeFile.name.split(".").pop() ?? "";
               const CMD: Record<string, string> = {
                 py:"python3",js:"node",mjs:"node",ts:"tsx",tsx:"tsx",go:"go run",
                 rs:"rustc",rb:"ruby",php:"php",java:"java",c:"gcc",cpp:"g++",
@@ -2202,22 +2207,37 @@ export default function VSCode({ onLaunchGame }: Props) {
                   />
                 </div>
               </div>
-              {/* HTML Preview pane */}
-              {htmlPreviewOpen && (
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#fff" }}>
-                  <div style={{ background: "#252526", padding: "4px 12px", fontSize: "11px", color: "#858585", borderBottom: "1px solid #3c3c3c", flexShrink: 0, display: "flex", alignItems: "center", gap: "6px" }}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#858585" strokeWidth="2"/></svg>
-                    Live Preview
+              {/* Preview pane — adapts based on file type */}
+              {htmlPreviewOpen && activeFile && (() => {
+                const lang = activeFile.lang ?? languageFromFileName(activeFile.name);
+                const ext = (activeFile.ext ?? activeFile.name.split(".").pop() ?? "").toLowerCase();
+
+                let label = "Live Preview";
+                let srcDoc = activeCode;
+                if (lang === "markdown") { label = "Markdown Preview"; srcDoc = markdownToHtml(activeCode); }
+                else if (lang === "json") { label = "JSON Preview"; srcDoc = jsonToHtml(activeCode); }
+                else if (lang === "csv" || ext === "csv") { label = "CSV Table"; srcDoc = csvToHtml(activeCode); }
+                else if (lang === "svg" || ext === "svg") { label = "SVG Preview"; srcDoc = svgToHtml(activeCode); }
+
+                const icoColor = lang === "markdown" ? "#4fc3f7" : lang === "json" ? "#f2cc60" : lang === "csv" ? "#4ec9b0" : lang === "svg" ? "#ce9178" : "#858585";
+
+                return (
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", background: lang === "html" || lang === "xml" ? "#fff" : "#0d1117" }}>
+                    <div style={{ background: "#252526", padding: "4px 12px", fontSize: "11px", color: "#858585", borderBottom: "1px solid #3c3c3c", flexShrink: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill={icoColor}><circle cx="12" cy="12" r="10"/></svg>
+                      {label}
+                      <span style={{ marginLeft: "auto", opacity: 0.5 }}>{activeFile.name}</span>
+                    </div>
+                    <iframe
+                      key={activeTab + lang}
+                      srcDoc={srcDoc}
+                      sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
+                      style={{ flex: 1, border: "none", background: "transparent" }}
+                      title={label}
+                    />
                   </div>
-                  <iframe
-                    key={activeTab}
-                    srcDoc={activeCode}
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
-                    style={{ flex: 1, border: "none", background: "#fff" }}
-                    title="HTML Preview"
-                  />
-                </div>
-              )}
+                );
+              })()}
             </div>
             ) : (
               <div style={{ background: "#1e1e1e", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: "16px" }}>
@@ -2377,6 +2397,150 @@ export default function VSCode({ onLaunchGame }: Props) {
       })()}
     </div>
   );
+}
+
+// ─── Preview renderers ────────────────────────────────────────────────────────
+function markdownToHtml(md: string): string {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inline = (s: string) => s
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;border-radius:6px;margin:4px 0">')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:#58a6ff;text-decoration:none" target="_blank" rel="noopener">$1</a>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/~~(.+?)~~/g, "<del>$1</del>");
+
+  const lines = md.split("\n");
+  const out: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.startsWith("```")) {
+      const lang = line.slice(3).trim();
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith("```")) { codeLines.push(esc(lines[i])); i++; }
+      out.push(`<pre><code class="lang-${lang}">${codeLines.join("\n")}</code></pre>`);
+      i++; continue;
+    }
+    const hm = line.match(/^(#{1,6})\s+(.+)$/);
+    if (hm) { out.push(`<h${hm[1].length}>${inline(esc(hm[2]))}</h${hm[1].length}>`); i++; continue; }
+    if (/^-{3,}$/.test(line.trim())) { out.push("<hr>"); i++; continue; }
+    if (line.startsWith("> ")) {
+      const qlines: string[] = [];
+      while (i < lines.length && lines[i].startsWith("> ")) { qlines.push(lines[i].slice(2)); i++; }
+      out.push(`<blockquote>${qlines.map(l => inline(esc(l))).join("<br>")}</blockquote>`);
+      continue;
+    }
+    if (line.includes("|") && i + 1 < lines.length && /^\|?[\s\-:|]+\|/.test(lines[i + 1])) {
+      const rows: string[] = [];
+      while (i < lines.length && lines[i].includes("|")) { rows.push(lines[i]); i++; }
+      const cells = rows.map(r => r.split("|").map(c => c.trim()).filter((_, j, a) => j > 0 && j < a.length - 1));
+      const header = cells[0]; const body = cells.slice(2);
+      out.push(`<table><thead><tr>${header.map(h => `<th>${inline(esc(h))}</th>`).join("")}</tr></thead><tbody>${body.map(row => `<tr>${row.map(c => `<td>${inline(esc(c))}</td>`).join("")}</tr>`).join("")}</tbody></table>`);
+      continue;
+    }
+    if (/^[\*\-\+] /.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^[\*\-\+] /.test(lines[i])) { items.push(`<li>${inline(esc(lines[i].slice(2)))}</li>`); i++; }
+      out.push(`<ul>${items.join("")}</ul>`); continue;
+    }
+    if (/^\d+\. /.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\d+\. /.test(lines[i])) { items.push(`<li>${inline(esc(lines[i].replace(/^\d+\. /, "")))}</li>`); i++; }
+      out.push(`<ol>${items.join("")}</ol>`); continue;
+    }
+    if (line.trim() === "") { out.push("<div style='height:8px'></div>"); i++; continue; }
+    const para: string[] = [];
+    while (i < lines.length && lines[i].trim() !== "" && !/^#{1,6} /.test(lines[i]) && !lines[i].startsWith(">") && !lines[i].startsWith("```") && !/^[\*\-\+] /.test(lines[i]) && !/^\d+\. /.test(lines[i]) && !lines[i].includes("|")) {
+      para.push(lines[i]); i++;
+    }
+    if (para.length) out.push(`<p>${inline(esc(para.join(" ")))}</p>`);
+  }
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:24px 40px;line-height:1.7;max-width:900px}
+    h1{font-size:2em;border-bottom:1px solid #30363d;padding-bottom:8px;margin:24px 0 12px}
+    h2{font-size:1.5em;border-bottom:1px solid #21262d;padding-bottom:6px;margin:20px 0 10px}
+    h3{font-size:1.25em;margin:16px 0 8px} h4,h5,h6{margin:12px 0 6px}
+    p{margin:8px 0 12px} a{color:#58a6ff} a:hover{text-decoration:underline}
+    code{background:#161b22;color:#e6edf3;padding:2px 6px;border-radius:4px;font-family:'Cascadia Code','Fira Code',Consolas,monospace;font-size:.875em;border:1px solid #30363d}
+    pre{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;overflow-x:auto;margin:12px 0}
+    pre code{background:none;border:none;padding:0;font-size:.875em}
+    blockquote{border-left:4px solid #388bfd;margin:12px 0;padding:8px 16px;color:#8b949e;background:#161b22;border-radius:0 4px 4px 0}
+    ul,ol{padding-left:24px;margin:8px 0 12px} li{margin:4px 0}
+    hr{border:none;border-top:1px solid #30363d;margin:24px 0}
+    table{border-collapse:collapse;width:100%;margin:12px 0}
+    th{background:#161b22;padding:8px 12px;border:1px solid #30363d;text-align:left;font-weight:600}
+    td{padding:7px 12px;border:1px solid #21262d} tr:nth-child(even) td{background:#0d1117} tr:nth-child(odd) td{background:#161b22}
+    tr:hover td{background:#1c2128} img{max-width:100%;border-radius:6px} del{color:#8b949e}
+  </style></head><body>${out.join("\n")}</body></html>`;
+}
+
+function csvToHtml(csv: string): string {
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const parseRow = (row: string): string[] => {
+    const cells: string[] = []; let cur = ""; let inQ = false;
+    for (const ch of row) {
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === "," && !inQ) { cells.push(cur); cur = ""; }
+      else { cur += ch; }
+    }
+    cells.push(cur);
+    return cells.map(c => c.trim());
+  };
+  const rows = csv.trim().split("\n").filter(r => r.trim()).map(parseRow);
+  if (!rows.length) return "<body style='background:#0d1117;color:#8b949e;padding:24px;font-family:sans-serif'>Empty file</body>";
+  const [header, ...body] = rows;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    body{margin:0;font-family:-apple-system,'Segoe UI',sans-serif;background:#0d1117;color:#e6edf3;font-size:13px}
+    .wrap{overflow:auto;height:100vh}
+    table{border-collapse:collapse;min-width:100%}
+    th{background:#161b22;color:#e6edf3;padding:8px 14px;border:1px solid #30363d;text-align:left;font-weight:600;position:sticky;top:0;white-space:nowrap;z-index:1}
+    td{padding:6px 14px;border:1px solid #21262d;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+    tr:nth-child(even) td{background:#0d1117} tr:nth-child(odd) td{background:#161b22}
+    tr:hover td{background:#1c2128} .rn{color:#6e7681;font-size:11px;user-select:none;text-align:right}
+    .summary{padding:8px 14px;color:#6e7681;font-size:11px;border-bottom:1px solid #21262d;background:#161b22}
+  </style></head><body><div class="summary">${rows.length - 1} rows × ${header.length} columns</div>
+  <div class="wrap"><table>
+    <thead><tr><th class="rn">#</th>${header.map(h => `<th>${esc(h)}</th>`).join("")}</tr></thead>
+    <tbody>${body.map((row, i) => `<tr><td class="rn">${i + 1}</td>${row.map(c => `<td title="${esc(c)}">${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody>
+  </table></div></body></html>`;
+}
+
+function jsonToHtml(json: string): string {
+  let parsed: unknown; let parseErr = "";
+  try { parsed = JSON.parse(json); } catch (e) { parseErr = (e as Error).message; }
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const colorize = (str: string) => esc(str).replace(
+    /("(\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+    m => {
+      if (/^"/.test(m) && /:$/.test(m)) return `<span style="color:#79c0ff">${m}</span>`;
+      if (/^"/.test(m)) return `<span style="color:#a5d6ff">${m}</span>`;
+      if (/true|false/.test(m)) return `<span style="color:#ff7b72">${m}</span>`;
+      if (/null/.test(m)) return `<span style="color:#8b949e">${m}</span>`;
+      return `<span style="color:#f2cc60">${m}</span>`;
+    });
+  const pretty = parseErr ? json : JSON.stringify(parsed, null, 2);
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    body{margin:0;padding:16px;background:#0d1117;font-family:'Cascadia Code','Fira Code',Consolas,monospace;font-size:13px;line-height:1.6;color:#e6edf3}
+    .err{color:#ff7b72;background:#161b22;border:1px solid #f85149;border-radius:6px;padding:12px 16px;margin:8px 0}
+    pre{margin:0;white-space:pre-wrap;word-break:break-all}
+    .info{color:#6e7681;font-size:11px;margin-bottom:12px;font-family:sans-serif}
+  </style></head><body>
+  ${parseErr ? `<div class="err">JSON Parse Error: ${esc(parseErr)}</div><pre>${esc(json)}</pre>` :
+    `<div class="info">${Array.isArray(parsed) ? `Array [${(parsed as unknown[]).length} items]` : typeof parsed === "object" && parsed ? `Object {${Object.keys(parsed as object).length} keys}` : typeof parsed}</div><pre>${colorize(pretty)}</pre>`}
+  </body></html>`;
+}
+
+function svgToHtml(svg: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    body{margin:0;background:#1e1e1e;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px}
+    .wrap{max-width:90vw;max-height:80vh;display:flex;align-items:center;justify-content:center;background:#252526;border-radius:8px;padding:24px;box-shadow:0 4px 24px rgba(0,0,0,.4)}
+    .wrap svg,.wrap img{max-width:80vw;max-height:70vh}
+    .lbl{color:#858585;font-size:11px;font-family:sans-serif}
+  </style></head><body><div class="wrap">${svg}</div><span class="lbl">SVG Preview</span></body></html>`;
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
