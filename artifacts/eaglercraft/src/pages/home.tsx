@@ -3815,16 +3815,29 @@ export default function VSCode({ onLaunchGame }: Props) {
   };
 
   // Terminal
+  const [terminalRunning, setTerminalRunning] = useState(false);
+
   const termInput = termInputs[activeTermId] ?? "";
   const setTermInput = (v: string) =>
     setTermInputs((p) => ({ ...p, [activeTermId]: v }));
 
-  const handleTermKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleTermKey = async (
+    e: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
     const history = termHistories[activeTermId] ?? [];
     const hidx = historyIdxes[activeTermId] ?? -1;
+
     if (e.key === "Enter") {
+      e.preventDefault();
+
+      if (terminalRunning) return;
+
       const input = termInput.trim();
       const sessionId = activeTermId;
+
+      if (!input) return;
+
+      setTerminalRunning(true);
 
       setTermSessions((ss) =>
         ss.map((s) =>
@@ -3834,55 +3847,128 @@ export default function VSCode({ onLaunchGame }: Props) {
                 lines: [
                   ...s.lines,
                   `\x02${CWD}\x03${input}`,
-                  ...(input ? ["Running..."] : []),
+                  "Running...",
                 ],
               }
             : s,
         ),
       );
 
-      if (input) {
-        setTermHistories((h) => ({
-          ...h,
-          [sessionId]: [input, ...(h[sessionId] ?? [])].slice(0, 100),
-        }));
-      }
+      setTermHistories((h) => ({
+        ...h,
+        [sessionId]: [input, ...(h[sessionId] ?? [])].slice(0, 100),
+      }));
 
-      setHistoryIdxes((h) => ({ ...h, [sessionId]: -1 }));
+      setHistoryIdxes((h) => ({
+        ...h,
+        [sessionId]: -1,
+      }));
+
       setTermInput("");
 
-      runCmd(input, files, fileContentsRef.current, activeTab).then(
-        (result) => {
-          setTermSessions((ss) =>
-            ss.map((s) => {
-              if (s.id !== sessionId) return s;
-              const lines = s.lines.filter((line) => line !== "Running...");
-              if (result === "\x00CLEAR") return { ...s, lines: [] };
+      try {
+        const result = await runCmd(
+          input,
+          files,
+          fileContentsRef.current,
+          activeTab,
+        );
+
+        setTermSessions((ss) =>
+          ss.map((s) => {
+            if (s.id !== sessionId) return s;
+
+            const lines = s.lines.filter(
+              (line) => line !== "Running...",
+            );
+
+            if (result === "\x00CLEAR") {
               return {
                 ...s,
-                lines: [...lines, ...(result ? result.split("\n") : [])],
+                lines: [],
               };
-            }),
-          );
-        },
-      );
+            }
+
+            return {
+              ...s,
+              lines: [
+                ...lines,
+                ...(result ? result.split("\n") : []),
+              ],
+            };
+          }),
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Unknown execution error";
+
+        setTermSessions((ss) =>
+          ss.map((s) => {
+            if (s.id !== sessionId) return s;
+
+            return {
+              ...s,
+              lines: [
+                ...s.lines.filter(
+                  (line) => line !== "Running...",
+                ),
+                `Error: ${message}`,
+              ],
+            };
+          }),
+        );
+        } finally {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              setTerminalRunning(false);
+
+              setTimeout(() => {
+                termInputRef.current?.focus();
+              }, 0);
+            });
+          });
+        }
+      }
 
       return;
     }
+
     if (e.key === "ArrowUp") {
       e.preventDefault();
-      const idx = Math.min(hidx + 1, history.length - 1);
-      setHistoryIdxes((h) => ({ ...h, [activeTermId]: idx }));
+
+      const idx = Math.min(
+        hidx + 1,
+        history.length - 1,
+      );
+
+      setHistoryIdxes((h) => ({
+        ...h,
+        [activeTermId]: idx,
+      }));
+
       setTermInput(history[idx] ?? "");
     }
+
     if (e.key === "ArrowDown") {
       e.preventDefault();
+
       const idx = Math.max(hidx - 1, -1);
-      setHistoryIdxes((h) => ({ ...h, [activeTermId]: idx }));
-      setTermInput(idx === -1 ? "" : history[idx]);
+
+      setHistoryIdxes((h) => ({
+        ...h,
+        [activeTermId]: idx,
+      }));
+
+      setTermInput(
+        idx === -1 ? "" : history[idx],
+      );
     }
+
     if (e.key === "Tab") {
       e.preventDefault();
+
       const cmds = [
         "ls",
         "pwd",
@@ -3896,16 +3982,28 @@ export default function VSCode({ onLaunchGame }: Props) {
         "whoami",
         "node",
         "python",
+        "python3",
         "go",
         "npm",
         "git",
         "clear",
         "help",
       ];
-      const m = cmds.find((c) => c.startsWith(termInput) && c !== termInput);
-      if (m) setTermInput(m + " ");
+
+      const m = cmds.find(
+        (c) =>
+          c.startsWith(termInput) &&
+          c !== termInput,
+      );
+
+      if (m) {
+        setTermInput(m + " ");
+      }
     }
-    if (e.key === "c" && e.ctrlKey) setTermInput("");
+
+    if (e.key === "c" && e.ctrlKey) {
+      setTermInput("");
+    }
   };
 
   const newTerminal = () => {
@@ -6353,40 +6451,57 @@ export default function VSCode({ onLaunchGame }: Props) {
                 {termSessions
                   .find((s) => s.id === activeTermId)
                   ?.lines.map(renderTermLine)}
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <span style={{ color: "#4ec9b0", fontWeight: "bold" }}>
-                    codeforge@workspace
-                  </span>
-                  <span style={{ color: "#858585" }}> {CWD} </span>
-                  <span style={{ color: "#cccccc" }}>% </span>
-                  <input
-                    ref={termInputRef}
-                    value={termInput}
-                    onChange={(e) => setTermInput(e.target.value)}
-                    onKeyDown={handleTermKey}
+                {!terminalRunning && (
+                  <div
                     style={{
-                      background: "none",
-                      border: "none",
-                      outline: "none",
-                      color: "#d4d4d4",
-                      fontFamily: "inherit",
-                      fontSize: "inherit",
-                      flex: 1,
-                      caretColor: "#aeafad",
-                      minWidth: 0,
-                      padding: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      flexWrap: "wrap",
                     }}
-                    autoComplete="off"
-                    spellCheck={false}
-                    autoCapitalize="off"
-                  />
-                </div>
+                  >
+                    <span
+                      style={{
+                        color: "#4ec9b0",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      codeforge@workspace
+                    </span>
+
+                    <span style={{ color: "#858585" }}>
+                      {" "}
+                      {CWD}{" "}
+                    </span>
+
+                    <span style={{ color: "#cccccc" }}>
+                      %{" "}
+                    </span>
+
+                    <input
+                      ref={termInputRef}
+                      value={termInput}
+                      onChange={(e) =>
+                        setTermInput(e.target.value)
+                      }
+                      onKeyDown={handleTermKey}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        outline: "none",
+                        color: "#d4d4d4",
+                        fontFamily: "inherit",
+                        fontSize: "inherit",
+                        flex: 1,
+                        caretColor: "#aeafad",
+                        minWidth: 0,
+                        padding: 0,
+                      }}
+                      autoComplete="off"
+                      spellCheck={false}
+                      autoCapitalize="off"
+                    />
+                  </div>
+                )}
                 <div ref={termEndRef} />
               </div>
             </div>
