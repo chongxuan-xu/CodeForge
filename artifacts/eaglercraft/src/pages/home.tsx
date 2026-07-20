@@ -166,7 +166,6 @@ function FileIcon({ name, ext }: { name: string; ext?: string }) {
     ? "gitignore"
     : (ext ?? name.split(".").pop() ?? "").toLowerCase();
 
-  // Plain file icon for txt and unknown extensions
   if (!key || key === "txt" || key === "document") {
     return <PlainFileIcon />;
   }
@@ -2310,7 +2309,6 @@ function highlightHTML(code: string): string {
   let result = "";
   let i = 0;
   while (i < code.length) {
-    // HTML comment
     if (code.startsWith("<!--", i)) {
       const end = code.indexOf("-->", i + 4);
       const block = end === -1 ? code.slice(i) : code.slice(i, end + 3);
@@ -2318,7 +2316,6 @@ function highlightHTML(code: string): string {
       i = end === -1 ? code.length : end + 3;
       continue;
     }
-    // DOCTYPE
     if (code.startsWith("<!", i)) {
       const end = code.indexOf(">", i);
       if (end === -1) {
@@ -2330,40 +2327,33 @@ function highlightHTML(code: string): string {
       i = end + 1;
       continue;
     }
-    // Tag
     if (code[i] === "<") {
       const isClose = code[i + 1] === "/";
       let j = i + 1;
       if (isClose) j++;
-      // Tag name
       while (j < code.length && /[\w:-]/.test(code[j])) j++;
       const tagName = code.slice(isClose ? i + 2 : i + 1, j).toLowerCase();
       result += spanC("#808080", esc(isClose ? "</" : "<"));
       result += spanC("#4ec9b0", esc(tagName));
 
-      // Collect attribute names while parsing so we know if an attr is an event handler
       let currentAttrName = "";
 
-      // Attributes
       while (
         j < code.length &&
         code[j] !== ">" &&
         !(code[j] === "/" && code[j + 1] === ">")
       ) {
-        // whitespace
         if (/\s/.test(code[j])) {
           result += esc(code[j]);
           j++;
           continue;
         }
-        // attribute name
         let ak = j;
         while (ak < code.length && /[\w:.-]/.test(code[ak])) ak++;
         if (ak > j) {
           currentAttrName = code.slice(j, ak).toLowerCase();
           result += spanC("#9cdcfe", esc(code.slice(j, ak)));
           j = ak;
-          // = and value
           if (code[j] === "=") {
             result += spanC("#808080", "=");
             j++;
@@ -2372,7 +2362,6 @@ function highlightHTML(code: string): string {
               let vk = j + 1;
               while (vk < code.length && code[vk] !== q) vk++;
               const rawVal = code.slice(j + 1, vk);
-              // Event handler attributes → highlight value as JS
               if (/^on[a-z]/.test(currentAttrName) && rawVal.trim()) {
                 result += spanC("#808080", esc(q));
                 result += highlight(rawVal, "javascript");
@@ -2388,14 +2377,12 @@ function highlightHTML(code: string): string {
         result += esc(code[j]);
         j++;
       }
-      // closing > or />
       if (code[j] === "/" && code[j + 1] === ">") {
         result += spanC("#808080", "/&gt;");
         j += 2;
       } else if (code[j] === ">") {
         result += spanC("#808080", "&gt;");
         j++;
-        // <script> block → highlight inner JS
         if (tagName === "script" && !isClose) {
           const closeTag = "</script>";
           const endScript = code.toLowerCase().indexOf(closeTag, j);
@@ -2412,7 +2399,6 @@ function highlightHTML(code: string): string {
             spanC("#808080", "&gt;");
           j = endScript + closeTag.length;
         }
-        // <style> block → highlight inner CSS
         if (tagName === "style" && !isClose) {
           const closeTag = "</style>";
           const endStyle = code.toLowerCase().indexOf(closeTag, j);
@@ -2444,9 +2430,7 @@ function highlightYAML(code: string): string {
     .split("\n")
     .map((line) => {
       const e = esc(line);
-      // comment
       if (/^\s*#/.test(line)) return spanC("#6a9955", e);
-      // key: value
       const kv = line.match(/^(\s*)([\w.-]+)(\s*:\s*)(.*)$/);
       if (kv) {
         const [, ws, key, sep, val] = kv;
@@ -2467,7 +2451,6 @@ function highlightYAML(code: string): string {
           coloredVal
         );
       }
-      // list item
       if (/^\s*-\s/.test(line)) {
         return line.replace(
           /^(\s*)(-)(\s+)(.*)$/,
@@ -2484,7 +2467,6 @@ function highlightCSS(code: string): string {
   let result = "";
   let i = 0;
   while (i < code.length) {
-    // Block comment
     if (code[i] === "/" && code[i + 1] === "*") {
       const end = code.indexOf("*/", i + 2);
       const block = end === -1 ? code.slice(i) : code.slice(i, end + 2);
@@ -2492,7 +2474,6 @@ function highlightCSS(code: string): string {
       i = end === -1 ? code.length : end + 2;
       continue;
     }
-    // String
     if (code[i] === '"' || code[i] === "'") {
       const q = code[i];
       let j = i + 1;
@@ -2501,7 +2482,6 @@ function highlightCSS(code: string): string {
       i = j + 1;
       continue;
     }
-    // At-rule
     if (code[i] === "@") {
       let j = i + 1;
       while (j < code.length && /[\w-]/.test(code[j])) j++;
@@ -2509,7 +2489,6 @@ function highlightCSS(code: string): string {
       i = j;
       continue;
     }
-    // Property name (before :) — but not inside { } values
     const propMatch = code.slice(i).match(/^([\w-]+)(\s*:)/);
     if (
       propMatch &&
@@ -2521,7 +2500,6 @@ function highlightCSS(code: string): string {
       i += propMatch[1].length;
       continue;
     }
-    // Selector characters and class/id
     if (code[i] === "." || code[i] === "#") {
       let j = i + 1;
       while (j < code.length && /[\w-]/.test(code[j])) j++;
@@ -2529,7 +2507,6 @@ function highlightCSS(code: string): string {
       i = j;
       continue;
     }
-    // Numbers with units
     if (/\d/.test(code[i]) && (i === 0 || /\W/.test(code[i - 1]))) {
       let j = i;
       while (j < code.length && /[\d.%]/.test(code[j])) j++;
@@ -2586,7 +2563,6 @@ function highlight(code: string, lang: string): string {
       .join("\n");
   }
 
-  // ── General token highlighter ─────────────────────────────────────────────
   const kws = KEYWORDS[lang] ?? [];
   const hashComment = [
     "python",
@@ -2611,7 +2587,6 @@ function highlight(code: string, lang: string): string {
   while (i < code.length) {
     const ch = code[i];
 
-    // -- or %% line comments
     if (ch === "-" && code[i + 1] === "-" && dashComment.includes(lang)) {
       const end = code.indexOf("\n", i);
       const line = end === -1 ? code.slice(i) : code.slice(i, end);
@@ -2628,7 +2603,6 @@ function highlight(code: string, lang: string): string {
       i = end === -1 ? code.length : end;
       continue;
     }
-    // # line comment
     if (ch === "#" && hashComment.includes(lang)) {
       const end = code.indexOf("\n", i);
       result += spanC(
@@ -2638,7 +2612,6 @@ function highlight(code: string, lang: string): string {
       i = end === -1 ? code.length : end;
       continue;
     }
-    // // line comment
     if (ch === "/" && code[i + 1] === "/") {
       const end = code.indexOf("\n", i);
       result += spanC(
@@ -2648,7 +2621,6 @@ function highlight(code: string, lang: string): string {
       i = end === -1 ? code.length : end;
       continue;
     }
-    // /* block comment */
     if (ch === "/" && code[i + 1] === "*") {
       const end = code.indexOf("*/", i + 2);
       const block = end === -1 ? code.slice(i) : code.slice(i, end + 2);
@@ -2657,7 +2629,6 @@ function highlight(code: string, lang: string): string {
       continue;
     }
 
-    // Decorator / annotation: @word
     if (ch === "@" && /[a-zA-Z_]/.test(code[i + 1] ?? "")) {
       let j = i + 1;
       while (j < code.length && /[\w.]/.test(code[j])) j++;
@@ -2666,7 +2637,6 @@ function highlight(code: string, lang: string): string {
       continue;
     }
 
-    // Strings
     if (ch === '"') {
       let j = i + 1;
       while (j < code.length) {
@@ -2719,10 +2689,8 @@ function highlight(code: string, lang: string): string {
       continue;
     }
 
-    // Numbers (hex, float, int)
     if (/\d/.test(ch) && (i === 0 || /\W/.test(code[i - 1]))) {
       let j = i;
-      // hex
       if (ch === "0" && (code[j + 1] === "x" || code[j + 1] === "X")) {
         j += 2;
         while (j < code.length && /[0-9a-fA-F_]/.test(code[j])) j++;
@@ -2734,38 +2702,31 @@ function highlight(code: string, lang: string): string {
           while (j < code.length && /\d/.test(code[j])) j++;
         }
       }
-      // optional suffix like f, u, L, usize etc.
       while (j < code.length && /[a-zA-Z]/.test(code[j])) j++;
       result += spanC("#b5cea8", esc(code.slice(i, j)));
       i = j;
       continue;
     }
 
-    // Identifiers
     if (/[a-zA-Z_$]/.test(ch)) {
       let j = i;
       while (j < code.length && /[\w$]/.test(code[j])) j++;
       const word = code.slice(i, j);
 
-      // Check if preceded by a dot → property access
       const prevNonWS = code.slice(0, i).trimEnd();
       const afterDot = prevNonWS.endsWith(".");
 
       if (kws.includes(word)) {
-        // Distinguish control flow (dimmer blue) from type keywords (lighter)
         result += spanC("#569cd6", esc(word));
       } else if (afterDot) {
-        // property / method access
         if (j < code.length && code[j] === "(") {
           result += spanC("#dcdcaa", esc(word));
         } else {
           result += spanC("#9cdcfe", esc(word));
         }
       } else if (/^[A-Z]/.test(word) && word.length > 1) {
-        // Type / class name
         result += spanC("#4ec9b0", esc(word));
       } else if (j < code.length && code[j] === "(") {
-        // Function call
         result += spanC("#dcdcaa", esc(word));
       } else {
         result += esc(word);
@@ -2774,7 +2735,6 @@ function highlight(code: string, lang: string): string {
       continue;
     }
 
-    // Operators (colorize common ones slightly)
     if (
       ch === "=" ||
       ch === "!" ||
@@ -2793,7 +2753,6 @@ function highlight(code: string, lang: string): string {
       ch === "~"
     ) {
       let j = i;
-      // greedy multi-char ops
       while (
         j < code.length &&
         /[=!<>&|?:+\-*/%^~]/.test(code[j]) &&
@@ -2820,6 +2779,7 @@ async function runCmd(
   files: FileEntry[],
   fileContents: Record<string, string>,
   activeTab: string | null,
+  stdinContent: string,
 ): Promise<string> {
   const parts = input.trim().split(/\s+/).filter(Boolean);
   const cmd = parts[0] ?? "";
@@ -2861,16 +2821,15 @@ async function runCmd(
       language,
       filename: f.name,
       code,
+      stdin: stdinContent,
     });
   };
 
   switch (cmd) {
     case "":
       return "";
-
     case "clear":
       return "\x00CLEAR";
-
     case "help":
       return [
         "Run examples:",
@@ -2885,7 +2844,6 @@ async function runCmd(
         "rustc main.rs",
         "run",
       ].join("\n");
-
     case "ls":
       return (
         [
@@ -2893,57 +2851,44 @@ async function runCmd(
           ...files.filter((f) => !f.isFolder).map((f) => f.name),
         ].join("  ") || "(empty)"
       );
-
     case "cat": {
       const f = findFile(args[0]);
       if (!f) return `cat: ${args[0] ?? ""}: No such file`;
       return fileContents[f.id] ?? fileContents[f.name] ?? "";
     }
-
     case "run":
       return await runFile(args[0]);
-
     case "python":
     case "python3":
       return await runFile(args[0], "python");
-
     case "node":
       return await runFile(args[0], "javascript");
-
     case "tsx":
     case "ts-node":
       return await runFile(args[0], "typescript");
-
     case "gcc":
       return await runFile(
         args.find((a) => a.endsWith(".c")),
         "c",
       );
-
     case "g++":
     case "clang++":
       return await runFile(
         args.find((a) => /\.(cpp|cc|cxx)$/.test(a)),
         "cpp",
       );
-
     case "java":
       return await runFile(args[0], "java");
-
     case "go":
       return args[0] === "run"
         ? await runFile(args[1], "go")
         : "Use: go run main.go";
-
     case "rustc":
       return await runFile(args[0], "rust");
-
     case "ruby":
       return await runFile(args[0], "ruby");
-
     case "php":
       return await runFile(args[0], "php");
-
     default:
       return `${cmd}: command not found`;
   }
@@ -3017,6 +2962,7 @@ type RunRequest = {
   language: string;
   code: string;
   filename: string;
+  stdin?: string;
 };
 
 function languageFromFileName(name: string): string {
@@ -3050,6 +2996,7 @@ async function executeOnline(req: RunRequest): Promise<string> {
     const result = await executeCode({
       code: req.code,
       language: req.language,
+      stdin: req.stdin,  // pass stdin if provided
     });
     const parts: string[] = [];
     if (result.compileError) parts.push(result.compileError.trim());
@@ -3092,24 +3039,20 @@ export default function VSCode({ onLaunchGame }: Props) {
   const [langFilter, setLangFilter] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [htmlPreviewOpen, setHtmlPreviewOpen] = useState(false);
-  // Editor settings
   const [editorFontSize, setEditorFontSize] = useState(14);
   const [editorWordWrap, setEditorWordWrap] = useState(false);
   const [editorTabSize, setEditorTabSize] = useState(2);
   const [autoSave, setAutoSave] = useState(false);
 
-  // Extensions
   const [installedExts, setInstalledExts] = useState<Set<string>>(new Set());
   const [installingExts, setInstallingExts] = useState<Set<string>>(new Set());
   const [extSearch, setExtSearch] = useState("");
 
-  // New item input
   const [newItemParent, setNewItemParent] = useState<string | null>(null);
   const [newItemType, setNewItemType] = useState<"file" | "folder">("file");
   const [newItemName, setNewItemName] = useState("");
   const newItemRef = useRef<HTMLInputElement>(null);
 
-  // Context menu
   const [ctxMenu, setCtxMenu] = useState<{
     x: number;
     y: number;
@@ -3119,6 +3062,50 @@ export default function VSCode({ onLaunchGame }: Props) {
   const [renameVal, setRenameVal] = useState("");
   const renameRef = useRef<HTMLInputElement>(null);
 
+  // ─── STDIN Content ──────────────────────────────────────────────────────────
+  const [stdinContent, setStdinContent] = useState("");
+  const [stdinVisible, setStdinVisible] = useState(false);
+
+  // Check for input functions in the active file
+  useEffect(() => {
+    if (!activeTab) {
+      setStdinVisible(false);
+      return;
+    }
+    const f = files.find((x) => x.id === activeTab);
+    if (!f) {
+      setStdinVisible(false);
+      return;
+    }
+    const code = fileContents[f.id] ?? fileContents[f.name] ?? "";
+    const lang = f.lang ?? languageFromFileName(f.name);
+
+    const inputPatterns = [
+      /input\s*\(/i,
+      /cin\s*>>/,
+      /scanf\s*\(/,
+      /java\.util\.Scanner/,
+      /readline\s*\(/i,
+      /await\s+readline/i,
+      /process\.stdin\.on/i,
+      /std::cin/i,
+      /gets\s*\(/i,
+      /fgets\s*\(/i,
+      /console\.readLine/i,
+      /read\s*Line\s*\(/i,
+      /let\s+stdin\s*=/i,
+      /Io\.stdin/i,
+      /read\s*\(\)/i,
+      /getchar\s*\(/i,
+      /getline\s*\(/i,
+    ];
+
+    const hasInput = inputPatterns.some(pattern => pattern.test(code));
+    const isRunnable = !["html", "css", "json", "markdown", "plaintext"].includes(lang);
+    setStdinVisible(hasInput && isRunnable);
+  }, [activeTab, files, fileContents]);
+
+  // ─── Context menu etc. ────────────────────────────────────────────────────
   useEffect(() => {
     const close = () => setCtxMenu(null);
     window.addEventListener("click", close);
@@ -3141,6 +3128,10 @@ export default function VSCode({ onLaunchGame }: Props) {
       setRenamingId(null);
       return;
     }
+
+    const oldFile = files.find(f => f.id === renamingId);
+    const oldName = oldFile?.name;
+
     setFiles((fs) =>
       fs.map((f) => {
         if (f.id !== renamingId) return f;
@@ -3148,11 +3139,30 @@ export default function VSCode({ onLaunchGame }: Props) {
         return { ...f, name, ext };
       }),
     );
-    setFileContents((c) => {
-      const old = (fs) => fs.find((f: FileEntry) => f.id === renamingId);
-      return c;
-    });
-    setOpenTabs((tabs) => tabs.map((t) => t));
+
+    if (oldName && oldName !== name) {
+      setFileContents((c) => {
+        const newC = { ...c };
+        if (c[oldName] !== undefined) {
+          newC[name] = c[oldName];
+          delete newC[oldName];
+        }
+        if (c[renamingId] !== undefined) {
+          newC[name] = c[renamingId];
+          delete newC[renamingId];
+        }
+        return newC;
+      });
+
+      setOpenTabs((tabs) => 
+        tabs.map(t => t === renamingId ? name : t)
+      );
+
+      if (activeTab === renamingId) {
+        setActiveTab(name);
+      }
+    }
+
     setRenamingId(null);
   };
 
@@ -3187,26 +3197,22 @@ export default function VSCode({ onLaunchGame }: Props) {
     navigator.clipboard.writeText("~/" + parts.join("/")).catch(() => {});
   };
 
-  // Search bar dropdown (in menu bar)
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchBarRef = useRef<HTMLDivElement>(null);
 
-  // Sidebar search
   const [sidebarSearchQ, setSidebarSearchQ] = useState("");
   const [sidebarReplaceQ, setSidebarReplaceQ] = useState("");
   const [searchResults, setSearchResults] = useState<
     { fileId: string; fileName: string; line: number; text: string }[]
   >([]);
 
-  // Editor
   const [cursorLine, setCursorLine] = useState(1);
   const [cursorCol, setCursorCol] = useState(1);
   const lineNumRef = useRef<HTMLDivElement>(null);
   const highlightedCodeRef = useRef<HTMLPreElement>(null);
 
-  // Terminal
   const [termSessions, setTermSessions] = useState([
     {
       id: 1,
@@ -3232,7 +3238,6 @@ export default function VSCode({ onLaunchGame }: Props) {
   const editorTextareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Resizable panel sizes
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const [terminalHeight, setTerminalHeight] = useState(220);
 
@@ -3285,7 +3290,6 @@ export default function VSCode({ onLaunchGame }: Props) {
       setTimeout(() => newItemRef.current?.focus(), 30);
   }, [newItemParent]);
 
-  // Close search dropdown when clicking outside
   useEffect(() => {
     if (!searchOpen) return;
     const handler = (e: MouseEvent) => {
@@ -3305,7 +3309,6 @@ export default function VSCode({ onLaunchGame }: Props) {
     [fileContents],
   );
 
-  // ─── Save / Open helpers ────────────────────────────────────────────────────
   const saveFile = useCallback(() => {
     if (!activeTab) return;
     const f = files.find((x) => x.id === activeTab);
@@ -3372,7 +3375,6 @@ export default function VSCode({ onLaunchGame }: Props) {
     [],
   );
 
-  // ─── Editor edit helpers ────────────────────────────────────────────────────
   const editorExecCommand = useCallback((cmd: string) => {
     const ta = editorTextareaRef.current;
     if (!ta) return;
@@ -3533,7 +3535,6 @@ export default function VSCode({ onLaunchGame }: Props) {
     [openTabs, activeTab],
   );
 
-  // ─── Global keyboard shortcuts ──────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
@@ -3566,7 +3567,6 @@ export default function VSCode({ onLaunchGame }: Props) {
     return () => window.removeEventListener("keydown", handler);
   }, [saveFile, activeTab, closeTab, editorToggleComment, editorGotoLine]);
 
-  // Search dropdown handler
   const handleSearchKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape") {
       setSearchOpen(false);
@@ -3592,7 +3592,6 @@ export default function VSCode({ onLaunchGame }: Props) {
     }
   };
 
-  // Sidebar search
   const doSearch = () => {
     if (!sidebarSearchQ.trim()) {
       setSearchResults([]);
@@ -3642,7 +3641,6 @@ export default function VSCode({ onLaunchGame }: Props) {
     doSearch();
   };
 
-  // New item creation
   const startNewItem = (type: "file" | "folder") => {
     let parentId = "root";
     if (selectedFile) {
@@ -3674,7 +3672,6 @@ export default function VSCode({ onLaunchGame }: Props) {
     const parentEntry = files.find((f) => f.id === realParentId);
     const depth = realParentId === null ? 0 : (parentEntry?.depth ?? 0) + 1;
 
-    // If the file has no extension at all, default to .txt
     const KNOWN_EXTS = new Set([
       "ts",
       "tsx",
@@ -3779,7 +3776,7 @@ export default function VSCode({ onLaunchGame }: Props) {
         dotIdx === -1 ||
         !KNOWN_EXTS.has(name.slice(dotIdx + 1).toLowerCase())
       ) {
-        finalName = dotIdx === -1 ? name + ".txt" : name; // only append .txt if NO extension at all
+        finalName = dotIdx === -1 ? name + ".txt" : name;
       }
     }
 
@@ -3814,18 +3811,56 @@ export default function VSCode({ onLaunchGame }: Props) {
     setNewItemName("");
   };
 
-  // Terminal
   const [terminalRunning, setTerminalRunning] = useState(false);
 
   const termInput = termInputs[activeTermId] ?? "";
   const setTermInput = (v: string) =>
     setTermInputs((p) => ({ ...p, [activeTermId]: v }));
 
-  const handleTermKey = async (
-    e: React.KeyboardEvent<HTMLInputElement>,
-  ) => {
+  const handleTermKey = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     const history = termHistories[activeTermId] ?? [];
     const hidx = historyIdxes[activeTermId] ?? -1;
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const idx = Math.min(hidx + 1, history.length - 1);
+      setHistoryIdxes((h) => ({
+        ...h,
+        [activeTermId]: idx,
+      }));
+      setTermInput(history[idx] ?? "");
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const idx = Math.max(hidx - 1, -1);
+      setHistoryIdxes((h) => ({
+        ...h,
+        [activeTermId]: idx,
+      }));
+      setTermInput(idx === -1 ? "" : history[idx]);
+      return;
+    }
+
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const cmds = [
+        "ls", "pwd", "cd", "echo", "cat", "mkdir", "touch",
+        "rm", "date", "whoami", "node", "python", "python3",
+        "go", "npm", "git", "clear", "help"
+      ];
+      const m = cmds.find((c) => c.startsWith(termInput) && c !== termInput);
+      if (m) {
+        setTermInput(m + " ");
+      }
+      return;
+    }
+
+    if (e.key === "c" && e.ctrlKey) {
+      setTermInput("");
+      return;
+    }
 
     if (e.key === "Enter") {
       e.preventDefault();
@@ -3872,15 +3907,14 @@ export default function VSCode({ onLaunchGame }: Props) {
           files,
           fileContentsRef.current,
           activeTab,
+          stdinContent,  // pass the current stdin content
         );
 
         setTermSessions((ss) =>
           ss.map((s) => {
             if (s.id !== sessionId) return s;
 
-            const lines = s.lines.filter(
-              (line) => line !== "Running...",
-            );
+            const lines = s.lines.filter((line) => line !== "Running...");
 
             if (result === "\x00CLEAR") {
               return {
@@ -3899,110 +3933,29 @@ export default function VSCode({ onLaunchGame }: Props) {
           }),
         );
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Unknown execution error";
-
+        const message = error instanceof Error ? error.message : "Unknown execution error";
         setTermSessions((ss) =>
           ss.map((s) => {
             if (s.id !== sessionId) return s;
-
             return {
               ...s,
               lines: [
-                ...s.lines.filter(
-                  (line) => line !== "Running...",
-                ),
+                ...s.lines.filter((line) => line !== "Running..."),
                 `Error: ${message}`,
               ],
             };
           }),
         );
-        } finally {
+      } finally {
+        requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              setTerminalRunning(false);
-
-              setTimeout(() => {
-                termInputRef.current?.focus();
-              }, 0);
-            });
+            setTerminalRunning(false);
+            setTimeout(() => {
+              termInputRef.current?.focus();
+            }, 0);
           });
-        }
+        });
       }
-
-      return;
-    }
-
-    if (e.key === "ArrowUp") {
-      e.preventDefault();
-
-      const idx = Math.min(
-        hidx + 1,
-        history.length - 1,
-      );
-
-      setHistoryIdxes((h) => ({
-        ...h,
-        [activeTermId]: idx,
-      }));
-
-      setTermInput(history[idx] ?? "");
-    }
-
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-
-      const idx = Math.max(hidx - 1, -1);
-
-      setHistoryIdxes((h) => ({
-        ...h,
-        [activeTermId]: idx,
-      }));
-
-      setTermInput(
-        idx === -1 ? "" : history[idx],
-      );
-    }
-
-    if (e.key === "Tab") {
-      e.preventDefault();
-
-      const cmds = [
-        "ls",
-        "pwd",
-        "cd",
-        "echo",
-        "cat",
-        "mkdir",
-        "touch",
-        "rm",
-        "date",
-        "whoami",
-        "node",
-        "python",
-        "python3",
-        "go",
-        "npm",
-        "git",
-        "clear",
-        "help",
-      ];
-
-      const m = cmds.find(
-        (c) =>
-          c.startsWith(termInput) &&
-          c !== termInput,
-      );
-
-      if (m) {
-        setTermInput(m + " ");
-      }
-    }
-
-    if (e.key === "c" && e.ctrlKey) {
-      setTermInput("");
     }
   };
 
@@ -4049,7 +4002,6 @@ export default function VSCode({ onLaunchGame }: Props) {
     );
   };
 
-  // Visible tree entries
   const visibleFiles = (() => {
     const result: FileEntry[] = [];
     const add = (parentId: string | null) => {
@@ -4070,7 +4022,6 @@ export default function VSCode({ onLaunchGame }: Props) {
   const activeFile = activeTab ? files.find((f) => f.id === activeTab) : null;
   const activeCode = activeFile ? getFileContent(activeFile.id) : "";
 
-  // Search dropdown results
   const searchDropdownFiles = files
     .filter(
       (f) =>
@@ -4110,7 +4061,6 @@ export default function VSCode({ onLaunchGame }: Props) {
         setShowLangPicker(false);
       }}
     >
-      {/* Hidden file input for Open File */}
       <input
         ref={fileInputRef}
         type="file"
@@ -4118,7 +4068,6 @@ export default function VSCode({ onLaunchGame }: Props) {
         onChange={handleOpenFileFromDisk}
       />
 
-      {/* ── Menu Bar ── */}
       <MenuBar
         searchBarRef={searchBarRef}
         searchOpen={searchOpen}
@@ -4193,9 +4142,7 @@ export default function VSCode({ onLaunchGame }: Props) {
         terminalOpen={terminalOpen}
       />
 
-      {/* ── Body ── */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* Activity Bar */}
         <div
           style={{
             width: "48px",
@@ -4272,7 +4219,6 @@ export default function VSCode({ onLaunchGame }: Props) {
           </div>
         </div>
 
-        {/* Sidebar */}
         {sidebarOpen && (
           <div
             style={{
@@ -4286,7 +4232,6 @@ export default function VSCode({ onLaunchGame }: Props) {
               position: "relative",
             }}
           >
-            {/* EXPLORER */}
             {activeActivity === "explorer" && (
               <>
                 <div
@@ -4403,7 +4348,6 @@ export default function VSCode({ onLaunchGame }: Props) {
                     if (e.target === e.currentTarget) setSelectedFile(null);
                   }}
                 >
-                  {/* Inline new-item input */}
                   {newItemParent !== null &&
                     (() => {
                       const parentEntry = files.find(
@@ -4560,7 +4504,6 @@ export default function VSCode({ onLaunchGame }: Props) {
               </>
             )}
 
-            {/* SEARCH */}
             {activeActivity === "search" && (
               <div
                 style={{
@@ -4740,7 +4683,6 @@ export default function VSCode({ onLaunchGame }: Props) {
               </div>
             )}
 
-            {/* GIT */}
             {activeActivity === "git" && (
               <div
                 style={{
@@ -4830,7 +4772,6 @@ export default function VSCode({ onLaunchGame }: Props) {
               </div>
             )}
 
-            {/* DEBUG */}
             {activeActivity === "debug" && (
               <div
                 style={{
@@ -4922,7 +4863,6 @@ export default function VSCode({ onLaunchGame }: Props) {
               </div>
             )}
 
-            {/* EXTENSIONS */}
             {activeActivity === "extensions" && (
               <div
                 style={{
@@ -5034,7 +4974,6 @@ export default function VSCode({ onLaunchGame }: Props) {
           </div>
         )}
 
-        {/* Sidebar resize handle */}
         {sidebarOpen && (
           <div
             onMouseDown={startSidebarResize}
@@ -5053,7 +4992,6 @@ export default function VSCode({ onLaunchGame }: Props) {
           />
         )}
 
-        {/* Editor + Terminal */}
         <div
           style={{
             flex: 1,
@@ -5063,7 +5001,6 @@ export default function VSCode({ onLaunchGame }: Props) {
             minWidth: 0,
           }}
         >
-          {/* Tab Bar */}
           <div
             style={{
               display: "flex",
@@ -5266,6 +5203,7 @@ export default function VSCode({ onLaunchGame }: Props) {
                     : `${base} ${activeFile.name}`;
                 return (
                   <button
+                    id="run-btn"
                     title={`Run: ${fullCmd}`}
                     onClick={() => {
                       setTerminalOpen(true);
@@ -5296,6 +5234,7 @@ export default function VSCode({ onLaunchGame }: Props) {
                         files,
                         fileContentsRef.current,
                         activeTab,
+                        stdinContent,  // pass stdin content
                       ).then((result) => {
                         setTermSessions((ss) =>
                           ss.map((s) => {
@@ -5349,7 +5288,6 @@ export default function VSCode({ onLaunchGame }: Props) {
               })()}
           </div>
 
-          {/* Editor */}
           <div
             style={{
               flex: 1,
@@ -5358,7 +5296,6 @@ export default function VSCode({ onLaunchGame }: Props) {
               minHeight: 0,
             }}
           >
-            {/* Settings Overlay */}
             {showSettings && (
               <div
                 style={{
@@ -5413,7 +5350,6 @@ export default function VSCode({ onLaunchGame }: Props) {
                     maxWidth: "700px",
                   }}
                 >
-                  {/* Font Size */}
                   <div>
                     <div
                       style={{
@@ -5610,7 +5546,6 @@ export default function VSCode({ onLaunchGame }: Props) {
                       </div>
                     </label>
                   </div>
-                  {/* Theme */}
                   <div>
                     <div
                       style={{
@@ -5656,7 +5591,6 @@ export default function VSCode({ onLaunchGame }: Props) {
                       </span>
                     </label>
                   </div>
-                  {/* Terminal */}
                   <div>
                     <div
                       style={{
@@ -5693,7 +5627,6 @@ export default function VSCode({ onLaunchGame }: Props) {
               <div
                 style={{ display: "flex", height: "100%", overflow: "hidden" }}
               >
-                {/* Editor pane */}
                 <div
                   style={{
                     display: "flex",
@@ -5702,6 +5635,7 @@ export default function VSCode({ onLaunchGame }: Props) {
                     overflow: "hidden",
                     background: "#1e1e1e",
                     borderRight: htmlPreviewOpen ? "1px solid #3c3c3c" : "none",
+                    position: "relative",
                   }}
                 >
                   <div
@@ -5873,8 +5807,6 @@ export default function VSCode({ onLaunchGame }: Props) {
                             "crystal",
                           ];
 
-                          // If cursor is between a matching bracket pair {|}, [|], (|)
-                          // → expand to three lines: indent+2, then closing bracket at same indent
                           const charBefore = before[before.length - 1];
                           const charAfter = after[0];
                           const bracketClose: Record<string, string> = {
@@ -5896,7 +5828,6 @@ export default function VSCode({ onLaunchGame }: Props) {
                             return;
                           }
 
-                          // HTML: cursor between ></tag> → expand to 3 lines
                           if (charBefore === ">" && after.startsWith("</")) {
                             const inner = "\n" + indent + "  ";
                             const outer = "\n" + indent;
@@ -6039,9 +5970,78 @@ export default function VSCode({ onLaunchGame }: Props) {
                       autoCapitalize="off"
                       autoCorrect="off"
                     />
+
+                    {/* ─── STDIN Widget ─────────────────────────────────────────── */}
+                    {stdinVisible && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: "16px",
+                          right: "16px",
+                          background: "rgba(30,30,30,0.92)",
+                          border: "1px solid #4ec9b0",
+                          borderRadius: "4px",
+                          padding: "4px 8px",
+                          zIndex: 20,
+                          backdropFilter: "blur(4px)",
+                          boxShadow: "0 2px 12px rgba(0,0,0,0.6)",
+                          display: "flex",
+                          flexDirection: "column",
+                          minWidth: "160px",
+                          maxWidth: "260px",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span
+                            style={{
+                              fontSize: "9px",
+                              fontWeight: 700,
+                              color: "#4ec9b0",
+                              letterSpacing: "0.5px",
+                              textTransform: "uppercase",
+                              userSelect: "none",
+                              background: "rgba(78,201,176,0.15)",
+                              padding: "0 6px",
+                              borderRadius: "2px",
+                            }}
+                          >
+                            stdin
+                          </span>
+                          <span style={{ flex: 1 }} />
+                          <span style={{ fontSize: "9px", color: "#858585" }}>
+                            {stdinContent.split("\n").length} lines
+                          </span>
+                        </div>
+                        <textarea
+                          value={stdinContent}
+                          onChange={(e) => setStdinContent(e.target.value)}
+                          onKeyDown={(e) => {
+                            // Enter inserts newline (default behaviour)
+                            // No submit action
+                          }}
+                          placeholder="Input for program"
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            outline: "none",
+                            color: "#d4d4d4",
+                            fontSize: "12px",
+                            fontFamily:
+                              "'Cascadia Code','Fira Code',monospace",
+                            resize: "vertical",
+                            minHeight: "30px",
+                            maxHeight: "100px",
+                            width: "100%",
+                            padding: "2px 0",
+                            marginTop: "2px",
+                            lineHeight: "1.4",
+                          }}
+                          rows={2}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
-                {/* Preview pane — adapts based on file type */}
                 {htmlPreviewOpen &&
                   activeFile &&
                   (() => {
@@ -6191,7 +6191,6 @@ export default function VSCode({ onLaunchGame }: Props) {
             )}
           </div>
 
-          {/* Terminal */}
           {terminalOpen && (
             <div
               style={{
@@ -6203,7 +6202,6 @@ export default function VSCode({ onLaunchGame }: Props) {
                 background: "#1e1e1e",
               }}
             >
-              {/* Resize handle at top of terminal */}
               <div
                 onMouseDown={startTermResize}
                 style={{
@@ -6261,7 +6259,6 @@ export default function VSCode({ onLaunchGame }: Props) {
                   </div>
                 ))}
                 <div style={{ flex: 1 }} />
-                {/* Terminal session tabs on right side */}
                 <div
                   style={{
                     display: "flex",
@@ -6509,7 +6506,6 @@ export default function VSCode({ onLaunchGame }: Props) {
         </div>
       </div>
 
-      {/* Status Bar */}
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -6669,7 +6665,6 @@ export default function VSCode({ onLaunchGame }: Props) {
         {activeTab && <SBtn text={`Ln ${cursorLine}, Col ${cursorCol}`} />}
       </div>
 
-      {/* Context Menu */}
       {ctxMenu &&
         (() => {
           const entry = ctxMenu.entry;
@@ -7503,10 +7498,6 @@ function MenuBar({
   terminalOpen: boolean;
 }) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
-  const [isMinimized, setIsMinimized] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  const close = () => setOpenMenu(null);
 
   const menus: Record<
     string,
@@ -7684,7 +7675,6 @@ function MenuBar({
         position: "relative",
       }}
     >
-      {/* Traffic lights */}
       <div
         style={{
           width: "70px",
@@ -7723,7 +7713,6 @@ function MenuBar({
           }}
         />
       </div>
-      {/* Menus */}
       {Object.entries(menus).map(([name, items]) => (
         <div key={name} style={{ position: "relative" }}>
           <div
@@ -7818,7 +7807,6 @@ function MenuBar({
         </div>
       ))}
 
-      {/* Center search bar with dropdown */}
       <div style={{ flex: 1, display: "flex", justifyContent: "center" }}>
         <div
           ref={searchBarRef}
