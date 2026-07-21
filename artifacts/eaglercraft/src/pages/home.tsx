@@ -2331,8 +2331,8 @@ function highlightHTML(code: string): string {
       const isClose = code[i + 1] === "/";
       let j = i + 1;
       if (isClose) j++;
-      while (j < code.length && /[\w:-]/.test(code[j])) j++;
-      const tagName = code.slice(isClose ? i + 2 : i + 1, j).toLowerCase();
+      while (j < code.length && /[A-Za-z0-9:-]/.test(code[j])) j++;
+      const tagName = code.slice(isClose ? i + 2 : i + 1, j);
       result += spanC("#808080", esc(isClose ? "</" : "<"));
       result += spanC("#4ec9b0", esc(tagName));
 
@@ -2349,9 +2349,9 @@ function highlightHTML(code: string): string {
           continue;
         }
         let ak = j;
-        while (ak < code.length && /[\w:.-]/.test(code[ak])) ak++;
+        while (ak < code.length && /[A-Za-z0-9:.-]/.test(code[ak])) ak++;
         if (ak > j) {
-          currentAttrName = code.slice(j, ak).toLowerCase();
+          currentAttrName = code.slice(j, ak);
           result += spanC("#9cdcfe", esc(code.slice(j, ak)));
           j = ak;
           if (code[j] === "=") {
@@ -2362,7 +2362,7 @@ function highlightHTML(code: string): string {
               let vk = j + 1;
               while (vk < code.length && code[vk] !== q) vk++;
               const rawVal = code.slice(j + 1, vk);
-              if (/^on[a-z]/.test(currentAttrName) && rawVal.trim()) {
+              if (/^on[a-z]/i.test(currentAttrName) && rawVal.trim()) {
                 result += spanC("#808080", esc(q));
                 result += highlight(rawVal, "javascript");
                 result += spanC("#808080", esc(q));
@@ -2383,7 +2383,7 @@ function highlightHTML(code: string): string {
       } else if (code[j] === ">") {
         result += spanC("#808080", "&gt;");
         j++;
-        if (tagName === "script" && !isClose) {
+        if (tagName.toLowerCase() === "script" && !isClose) {
           const closeTag = "</script>";
           const endScript = code.toLowerCase().indexOf(closeTag, j);
           if (endScript === -1) {
@@ -2399,7 +2399,7 @@ function highlightHTML(code: string): string {
             spanC("#808080", "&gt;");
           j = endScript + closeTag.length;
         }
-        if (tagName === "style" && !isClose) {
+        if (tagName.toLowerCase() === "style" && !isClose) {
           const closeTag = "</style>";
           const endStyle = code.toLowerCase().indexOf(closeTag, j);
           if (endStyle === -1) {
@@ -2774,7 +2774,6 @@ function highlight(code: string, lang: string): string {
 // ─── Terminal ────────────────────────────────────────────────────────────────
 let CWD = "~";
 
-// Helper to find a file by name or id (used by runCmd)
 function findFileHelper(files: FileEntry[], name?: string, activeTab?: string | null) {
   if (!name) {
     return activeTab
@@ -2787,12 +2786,10 @@ function findFileHelper(files: FileEntry[], name?: string, activeTab?: string | 
   );
 }
 
-// Helper to find a folder by name
 function findFolderHelper(files: FileEntry[], name: string) {
   return files.find((f) => f.isFolder && (f.name === name || f.id === name));
 }
 
-// Helper to run a code file
 async function runFileHelper(
   files: FileEntry[],
   fileContents: Record<string, string>,
@@ -2821,7 +2818,6 @@ async function runFileHelper(
   });
 }
 
-// Terminal command result types
 type TerminalResult = 
   | { type: "output"; content: string }
   | { type: "clear" }
@@ -2846,10 +2842,8 @@ async function runCmd(
   switch (cmd) {
     case "":
       return { type: "noop" };
-
     case "clear":
       return { type: "clear" };
-
     case "help":
       return {
         type: "output",
@@ -2892,7 +2886,6 @@ async function runCmd(
           "  exit                 Close terminal"
         ].join("\n")
       };
-
     case "ls": {
       const entries = files.filter(f => f.parentId === null);
       if (entries.length === 0) {
@@ -2902,11 +2895,9 @@ async function runCmd(
       const fileList = entries.filter(f => !f.isFolder).map(f => f.name);
       return { type: "output", content: [...folders, ...fileList].join("  ") };
     }
-
     case "cd": {
       const target = args[0] || "~";
       let newPath = CWD;
-
       if (target === "~") {
         newPath = "~";
       } else if (target === "..") {
@@ -2920,7 +2911,6 @@ async function runCmd(
       } else if (target === ".") {
         // stay
       } else {
-        // Check if the target is a valid folder
         const folder = findFolderHelper(files, target);
         if (folder) {
           if (CWD === "~") {
@@ -2932,17 +2922,13 @@ async function runCmd(
           return { type: "output", content: `cd: ${target}: No such directory` };
         }
       }
-
       CWD = newPath;
       return { type: "cd", path: newPath };
     }
-
     case "pwd":
       return { type: "output", content: CWD };
-
     case "echo":
       return { type: "output", content: args.join(" ") };
-
     case "cat": {
       const f = findFileHelper(files, args[0], activeTab);
       if (!f) {
@@ -2951,58 +2937,44 @@ async function runCmd(
       const content = fileContents[f.id] ?? fileContents[f.name] ?? "";
       return { type: "output", content };
     }
-
     case "run":
       return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0]) };
-
     case "python":
     case "python3":
       return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "python") };
-
     case "node":
       return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "javascript") };
-
     case "tsx":
     case "ts-node":
       return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "typescript") };
-
     case "gcc":
       return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args.find((a) => a.endsWith(".c")), "c") };
-
     case "g++":
     case "clang++":
       return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args.find((a) => /\.(cpp|cc|cxx)$/.test(a)), "cpp") };
-
     case "java":
       return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "java") };
-
     case "go":
       if (args[0] === "run") {
         return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[1], "go") };
       }
       return { type: "output", content: "Use: go run main.go" };
-
     case "rustc":
       return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "rust") };
-
     case "ruby":
       return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "ruby") };
-
     case "php":
       return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "php") };
-
     case "mkdir": {
       if (!args[0]) {
         return { type: "output", content: "mkdir: missing operand" };
       }
       const name = args[0];
-      // Check if already exists
       if (files.some(f => f.name === name && f.isFolder && f.parentId === null)) {
         return { type: "output", content: `mkdir: cannot create directory '${name}': File exists` };
       }
       return { type: "mkdir", name, parentId: null };
     }
-
     case "touch": {
       if (!args[0]) {
         return { type: "output", content: "touch: missing file operand" };
@@ -3013,7 +2985,6 @@ async function runCmd(
       }
       return { type: "touch", name, parentId: null, content: "" };
     }
-
     case "rm": {
       if (!args[0]) {
         return { type: "output", content: "rm: missing operand" };
@@ -3023,18 +2994,14 @@ async function runCmd(
       if (!entry) {
         return { type: "output", content: `rm: cannot remove '${name}': No such file or directory` };
       }
-
-      // Collect all entries to delete (recursive)
       const idsToDelete: string[] = [];
       const collect = (id: string) => {
         idsToDelete.push(id);
         files.filter(f => f.parentId === id).forEach(child => collect(child.id));
       };
       collect(entry.id);
-
       return { type: "rm", ids: idsToDelete };
     }
-
     case "cp": {
       if (args.length < 2) {
         return { type: "output", content: "cp: missing file operand" };
@@ -3048,11 +3015,9 @@ async function runCmd(
       if (files.some(f => f.name === dest && !f.isFolder && f.parentId === null)) {
         return { type: "output", content: `cp: cannot create '${dest}': File exists` };
       }
-
       const content = fileContents[srcFile.name] || fileContents[srcFile.id] || "";
       return { type: "touch", name: dest, parentId: null, content };
     }
-
     case "mv": {
       if (args.length < 2) {
         return { type: "output", content: "mv: missing file operand" };
@@ -3066,23 +3031,15 @@ async function runCmd(
       if (files.some(f => f.name === dest && !f.isFolder && f.parentId === null)) {
         return { type: "output", content: `mv: cannot move to '${dest}': File exists` };
       }
-
       const content = fileContents[srcFile.name] || fileContents[srcFile.id] || "";
-
-      // Delete the source file
       const idsToDelete: string[] = [];
       const collect = (id: string) => {
         idsToDelete.push(id);
         files.filter(f => f.parentId === id).forEach(child => collect(child.id));
       };
       collect(srcFile.id);
-
-      // Create the destination file with the source content
-      // We need to return both actions
       return { type: "output", content: "mv: Use 'cp' then 'rm' to move files" };
     }
-
-    // Mock commands
     case "npm": {
       const sub = args[0] || "";
       const rest = args.slice(1);
@@ -3103,7 +3060,6 @@ async function runCmd(
           return { type: "output", content: `npm: '${sub}' is not a known command. Try 'npm install', 'npm start', 'npm run build'.` };
       }
     }
-
     case "pip": {
       const sub = args[0] || "";
       const rest = args.slice(1);
@@ -3123,7 +3079,6 @@ async function runCmd(
           return { type: "output", content: `pip: '${sub}' is not a known command. Try 'pip install', 'pip freeze'.` };
       }
     }
-
     case "git": {
       const sub = args[0] || "";
       const rest = args.slice(1);
@@ -3144,7 +3099,6 @@ async function runCmd(
           return { type: "output", content: `git: '${sub}' is not a known command. Try 'git status', 'git add', 'git commit -m "msg"'.` };
       }
     }
-
     case "dotnet": {
       const sub = args[0] || "";
       switch (sub) {
@@ -3156,7 +3110,6 @@ async function runCmd(
           return { type: "output", content: `dotnet: '${sub}' is not a known command. Try 'dotnet run', 'dotnet build'.` };
       }
     }
-
     case "csc": {
       const file = args.find(a => a.endsWith(".cs"));
       if (!file) {
@@ -3164,7 +3117,6 @@ async function runCmd(
       }
       return { type: "output", content: `Microsoft (R) Visual C# Compiler version 4.8.0\n\n${file} compiled successfully.` };
     }
-
     case "cs": {
       const file = args.find(a => a.endsWith(".csx"));
       if (!file) {
@@ -3172,10 +3124,8 @@ async function runCmd(
       }
       return { type: "output", content: `Hello from C# script!\n${file} executed.` };
     }
-
     case "exit":
       return { type: "exit" };
-
     default:
       return { type: "output", content: `${cmd}: command not found` };
   }
@@ -3348,6 +3298,10 @@ export default function VSCode({ onLaunchGame }: Props) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
   const renameRef = useRef<HTMLInputElement>(null);
+
+  // ─── Drag and Drop State ──────────────────────────────────────────────────
+  const [draggedItem, setDraggedItem] = useState<FileEntry | null>(null);
+  const [dragOverItemId, setDragOverItemId] = useState<string | null>(null);
 
   // ─── STDIN Content ──────────────────────────────────────────────────────────
   const [stdinContent, setStdinContent] = useState("");
@@ -4197,9 +4151,7 @@ export default function VSCode({ onLaunchGame }: Props) {
           stdinContent,
         );
 
-        // Handle different result types
         if (typeof result === 'string') {
-          // Backward compatibility - string output
           setTermSessions((ss) =>
             ss.map((s) => {
               if (s.id !== sessionId) return s;
@@ -4217,7 +4169,6 @@ export default function VSCode({ onLaunchGame }: Props) {
             }),
           );
         } else {
-          // Handle structured result
           switch (result.type) {
             case "clear":
               setTermSessions((ss) =>
@@ -4245,7 +4196,6 @@ export default function VSCode({ onLaunchGame }: Props) {
               break;
 
             case "mkdir": {
-              // Actually create the folder
               const newEntry: FileEntry = {
                 id: `folder-${Date.now()}`,
                 name: result.name,
@@ -4273,7 +4223,6 @@ export default function VSCode({ onLaunchGame }: Props) {
             }
 
             case "touch": {
-              // Actually create the file
               const ext = result.name.includes(".") ? result.name.split(".").pop() : undefined;
               const newEntry: FileEntry = {
                 id: `file-${Date.now()}`,
@@ -4291,7 +4240,6 @@ export default function VSCode({ onLaunchGame }: Props) {
                 [newEntry.id]: result.content || ""
               }));
 
-              // Auto-open the file
               setTimeout(() => openFile(newEntry.id), 50);
 
               setTermSessions((ss) =>
@@ -4311,7 +4259,6 @@ export default function VSCode({ onLaunchGame }: Props) {
             }
 
             case "rm": {
-              // Actually delete the files/folders
               const idsToDelete = new Set(result.ids);
               setFiles((prev) => prev.filter((f) => !idsToDelete.has(f.id)));
               setFileContents((prev) => {
@@ -4347,9 +4294,6 @@ export default function VSCode({ onLaunchGame }: Props) {
             }
 
             case "cd": {
-              // Update CWD
-              // CWD is already updated in runCmd, but we need to sync the React state
-              // We'll handle this by updating the terminal lines
               setTermSessions((ss) =>
                 ss.map((s) => {
                   if (s.id !== sessionId) return s;
@@ -4361,12 +4305,10 @@ export default function VSCode({ onLaunchGame }: Props) {
             }
 
             case "exit":
-              // Close the terminal
               setTerminalOpen(false);
               break;
 
             case "noop":
-              // Do nothing
               break;
           }
         }
@@ -4438,6 +4380,92 @@ export default function VSCode({ onLaunchGame }: Props) {
         {line}
       </div>
     );
+  };
+
+  // ─── Drag and Drop Handlers ───────────────────────────────────────────────
+  const handleDragStart = (e: React.DragEvent, entry: FileEntry) => {
+    setDraggedItem(entry);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", entry.id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, entry: FileEntry) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverItemId(entry.id);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverItemId(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetEntry: FileEntry) => {
+    e.preventDefault();
+    setDragOverItemId(null);
+
+    if (!draggedItem) return;
+    if (draggedItem.id === targetEntry.id) return;
+
+    // Cannot drag into yourself
+    if (draggedItem.id === targetEntry.id) return;
+
+    // If target is a folder, move dragged item into it
+    if (targetEntry.isFolder) {
+      // Check if we're trying to move a parent into its child
+      let current = targetEntry.parentId;
+      while (current) {
+        const parent = files.find(f => f.id === current);
+        if (parent?.id === draggedItem.id) {
+          setDraggedItem(null);
+          return; // Can't move a folder into its own child
+        }
+        current = parent?.parentId || null;
+      }
+
+      setFiles(prev => 
+        prev.map(f => {
+          if (f.id === draggedItem.id) {
+            const depth = targetEntry.depth + 1;
+            return { ...f, parentId: targetEntry.id, depth };
+          }
+          // Update depths of children if needed
+          if (f.parentId === draggedItem.id) {
+            // This would require updating all children - simplified version
+            return f;
+          }
+          return f;
+        })
+      );
+
+      setExpanded(prev => ({ ...prev, [targetEntry.id]: true }));
+    } else {
+      // Move to same level as target (reorder)
+      const targetParent = targetEntry.parentId;
+      const draggedIndex = files.findIndex(f => f.id === draggedItem.id);
+      const targetIndex = files.findIndex(f => f.id === targetEntry.id);
+
+      if (draggedIndex === -1 || targetIndex === -1) return;
+
+      // Only allow reordering within the same parent
+      if (files[draggedIndex].parentId !== targetParent) return;
+
+      setFiles(prev => {
+        const newFiles = [...prev];
+        const [removed] = newFiles.splice(draggedIndex, 1);
+        const newTargetIndex = newFiles.findIndex(f => f.id === targetEntry.id);
+        newFiles.splice(newTargetIndex, 0, removed);
+        return newFiles;
+      });
+    }
+
+    setDraggedItem(null);
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDraggedItem(null);
+    setDragOverItemId(null);
   };
 
   const visibleFiles = (() => {
@@ -4846,94 +4874,110 @@ export default function VSCode({ onLaunchGame }: Props) {
                         </div>
                       );
                     })()}
-                  {visibleFiles.map((f) => (
-                    <div
-                      key={f.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (renamingId === f.id) return;
-                        if (f.isFolder) {
-                          setExpanded((ex) => ({ ...ex, [f.id]: !ex[f.id] }));
+                  {visibleFiles.map((f) => {
+                    const isDragOver = dragOverItemId === f.id;
+                    return (
+                      <div
+                        key={f.id}
+                        draggable={!f.isFolder || true}
+                        onDragStart={(e) => handleDragStart(e, f)}
+                        onDragOver={(e) => handleDragOver(e, f)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, f)}
+                        onDragEnd={handleDragEnd}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (renamingId === f.id) return;
+                          if (f.isFolder) {
+                            setExpanded((ex) => ({ ...ex, [f.id]: !ex[f.id] }));
+                            setSelectedFile(f.id);
+                          } else openFile(f.id);
+                        }}
+                        onContextMenu={(e) => {
                           setSelectedFile(f.id);
-                        } else openFile(f.id);
-                      }}
-                      onContextMenu={(e) => {
-                        setSelectedFile(f.id);
-                        openCtxMenu(e, f);
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        paddingLeft: `${f.depth * 12 + 4}px`,
-                        paddingRight: "8px",
-                        height: "22px",
-                        cursor: "pointer",
-                        background:
-                          selectedFile === f.id ? "#094771" : "transparent",
-                        userSelect: "none",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (selectedFile !== f.id)
-                          e.currentTarget.style.background = "#2a2d2e";
-                      }}
-                      onMouseLeave={(e) => {
-                        if (selectedFile !== f.id)
-                          e.currentTarget.style.background = "transparent";
-                      }}
-                    >
-                      {f.isFolder ? (
-                        <>
-                          <span style={{ width: "12px", flexShrink: 0 }}>
-                            {expanded[f.id] ? <SvgChevD /> : <SvgChevR />}
+                          openCtxMenu(e, f);
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          paddingLeft: `${f.depth * 12 + 4}px`,
+                          paddingRight: "8px",
+                          height: "22px",
+                          cursor: "pointer",
+                          background:
+                            selectedFile === f.id 
+                              ? "#094771" 
+                              : isDragOver 
+                                ? "#2a4d6a" 
+                                : "transparent",
+                          userSelect: "none",
+                          borderTop: isDragOver ? "2px solid #007acc" : "none",
+                          borderBottom: isDragOver ? "2px solid #007acc" : "none",
+                          borderRadius: isDragOver ? "2px" : "0",
+                        }}
+                        onMouseEnter={(e) => {
+                          if (selectedFile !== f.id && !isDragOver)
+                            e.currentTarget.style.background = "#2a2d2e";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (selectedFile !== f.id && !isDragOver)
+                            e.currentTarget.style.background = "transparent";
+                        }}
+                      >
+                        {f.isFolder ? (
+                          <>
+                            <span style={{ width: "12px", flexShrink: 0 }}>
+                              {expanded[f.id] ? <SvgChevD /> : <SvgChevR />}
+                            </span>
+                            <FolderIcon open={!!expanded[f.id]} />
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ width: "12px", flexShrink: 0 }} />
+                            <FileIcon name={f.name} ext={f.ext} />
+                          </>
+                        )}
+                        {renamingId === f.id ? (
+                          <input
+                            ref={renameRef}
+                            value={renameVal}
+                            autoFocus
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => setRenameVal(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") commitRename();
+                              if (e.key === "Escape") setRenamingId(null);
+                            }}
+                            onBlur={commitRename}
+                            style={{
+                              flex: 1,
+                              background: "#3c3c3c",
+                              border: "1px solid #007acc",
+                              color: "#cccccc",
+                              padding: "0 4px",
+                              fontSize: "13px",
+                              outline: "none",
+                              borderRadius: "2px",
+                              height: "18px",
+                              minWidth: 0,
+                            }}
+                          />
+                        ) : (
+                          <span
+                            style={{
+                              fontSize: "13px",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {f.name}
                           </span>
-                          <FolderIcon open={!!expanded[f.id]} />
-                        </>
-                      ) : (
-                        <>
-                          <span style={{ width: "12px", flexShrink: 0 }} />
-                          <FileIcon name={f.name} ext={f.ext} />
-                        </>
-                      )}
-                      {renamingId === f.id ? (
-                        <input
-                          ref={renameRef}
-                          value={renameVal}
-                          autoFocus
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => setRenameVal(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") commitRename();
-                            if (e.key === "Escape") setRenamingId(null);
-                          }}
-                          onBlur={commitRename}
-                          style={{
-                            flex: 1,
-                            background: "#3c3c3c",
-                            border: "1px solid #007acc",
-                            color: "#cccccc",
-                            padding: "0 4px",
-                            fontSize: "13px",
-                            outline: "none",
-                            borderRadius: "2px",
-                            height: "18px",
-                            minWidth: 0,
-                          }}
-                        />
-                      ) : (
-                        <span
-                          style={{
-                            fontSize: "13px",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {f.name}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                        )}
+                      </div>
+                    );
+                  })}
                   <div
                     style={{ minHeight: "40px" }}
                     onClick={() => setSelectedFile(null)}
