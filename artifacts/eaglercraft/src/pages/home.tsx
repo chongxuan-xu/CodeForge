@@ -2785,38 +2785,33 @@ async function runCmd(
   const cmd = parts[0] ?? "";
   const args = parts.slice(1);
 
+  // Helper to find a file by name or id
   const findFile = (name?: string) => {
     if (!name) {
       return activeTab
         ? (files.find((f) => f.id === activeTab && !f.isFolder) ?? null)
         : null;
     }
-
     return (
       files.find((f) => !f.isFolder && (f.name === name || f.id === name)) ??
       null
     );
   };
 
+  // Helper to run a code file (existing logic)
   const runFile = async (name?: string, forcedLang?: string) => {
     const f = findFile(name);
-
     if (!f) {
       return name ? `${name}: No such file` : "No active file to run.";
     }
-
     const code = fileContents[f.id] ?? fileContents[f.name] ?? "";
-
     if (!code.trim()) {
       return `${f.name} is empty. The editor did not save the code.`;
     }
-
     const language = forcedLang ?? languageFromFileName(f.name);
-
     if (["html", "css", "json", "markdown", "plaintext"].includes(language)) {
       return `${f.name} is not a runnable program file.`;
     }
-
     return await executeOnline({
       language,
       filename: f.name,
@@ -2825,6 +2820,34 @@ async function runCmd(
     });
   };
 
+  // --- New helpers for mock responses ---
+  const mockNpmInstall = (packages: string[]) => {
+    if (packages.length === 0) {
+      return `added 123 packages in 2s\n\n123 packages are looking for funding\n  run \`npm fund\` for details`;
+    }
+    return `added ${packages.length} packages in 1s`;
+  };
+
+  const mockPipInstall = (packages: string[]) => {
+    if (packages.length === 0) return "Requirement already satisfied: pip in ./.venv/lib/python3.11/site-packages (22.3.1)";
+    return packages.map(pkg =>
+      `Collecting ${pkg}\n  Downloading ${pkg}-1.0.0-py3-none-any.whl (10 kB)\nInstalling collected packages: ${pkg}\nSuccessfully installed ${pkg}-1.0.0`
+    ).join("\n");
+  };
+
+  const mockGitStatus = () => {
+    return `On branch main\nYour branch is up to date with 'origin/main'.\n\nnothing to commit, working tree clean`;
+  };
+
+  const mockGitAdd = (files: string[]) => {
+    return files.length ? `added ${files.join(' ')}` : "Nothing specified, nothing added.";
+  };
+
+  const mockGitCommit = (msg?: string) => {
+    return msg ? `[main abc1234] ${msg}\n 1 file changed, 1 insertion(+)` : "Aborting commit due to empty commit message.";
+  };
+
+  // --- Command handling ---
   switch (cmd) {
     case "":
       return "";
@@ -2832,25 +2855,80 @@ async function runCmd(
       return "\x00CLEAR";
     case "help":
       return [
-        "Run examples:",
-        "python main.py",
-        "python3 main.py",
-        "node main.js",
-        "tsx main.ts",
-        "gcc main.c",
-        "g++ main.cpp",
-        "java Main.java",
-        "go run main.go",
-        "rustc main.rs",
-        "run",
+        "Available commands:",
+        "  help                 Show this help",
+        "  clear                Clear terminal",
+        "  ls                   List files and folders",
+        "  cd <dir>             Change directory (supports .., ~, /)",
+        "  pwd                  Show current directory",
+        "  echo <text>          Print text",
+        "  cat <file>           Show file content",
+        "  run [file]           Run the active file or specified file",
+        "  python|python3 <file> Run a Python file",
+        "  node <file>          Run a JavaScript file",
+        "  tsx <file>           Run a TypeScript file",
+        "  gcc <file.c>         Compile C file",
+        "  g++ <file.cpp>       Compile C++ file",
+        "  java <file.java>     Run Java file",
+        "  go run <file.go>     Run Go file",
+        "  rustc <file.rs>      Compile Rust file",
+        "  ruby <file.rb>       Run Ruby file",
+        "  php <file.php>       Run PHP file",
+        "  npm install [pkgs]   Mock npm install",
+        "  npm start            Mock npm start",
+        "  npm run build        Mock npm run build",
+        "  pip install [pkgs]   Mock pip install",
+        "  pip freeze           Mock pip freeze",
+        "  git status           Mock git status",
+        "  git add <files>      Mock git add",
+        "  git commit -m <msg>  Mock git commit",
+        "  dotnet run           Mock dotnet run",
+        "  dotnet build         Mock dotnet build",
+        "  csc <file.cs>        Mock C# compiler",
+        "  mkdir <name>         Create a new folder (mock)",
+        "  touch <name>         Create a new file (mock)",
+        "  rm <name>            Remove file/folder (mock)",
+        "  exit                 Close terminal (mock)"
       ].join("\n");
-    case "ls":
+    case "ls": {
+      // For simplicity, list all files regardless of CWD (original behavior)
       return (
         [
           ...files.filter((f) => f.isFolder).map((f) => f.name + "/"),
           ...files.filter((f) => !f.isFolder).map((f) => f.name),
         ].join("  ") || "(empty)"
       );
+    }
+    case "cd": {
+      const target = args[0] || "~";
+      if (target === "~") {
+        CWD = "~";
+      } else if (target === "..") {
+        // simple: go to parent if not at root
+        if (CWD !== "~") {
+          const parts = CWD.split("/");
+          parts.pop();
+          CWD = parts.join("/") || "~";
+        }
+      } else if (target.startsWith("/")) {
+        // absolute path – just set to it for demo (no real FS)
+        CWD = target;
+      } else if (target === ".") {
+        // stay
+      } else {
+        // relative: append to current
+        if (CWD === "~") {
+          CWD = `~/${target}`;
+        } else {
+          CWD = `${CWD}/${target}`;
+        }
+      }
+      return "";
+    }
+    case "pwd":
+      return CWD;
+    case "echo":
+      return args.join(" ");
     case "cat": {
       const f = findFile(args[0]);
       if (!f) return `cat: ${args[0] ?? ""}: No such file`;
@@ -2889,6 +2967,109 @@ async function runCmd(
       return await runFile(args[0], "ruby");
     case "php":
       return await runFile(args[0], "php");
+
+    // --- New mock commands ---
+    case "npm": {
+      const sub = args[0] || "";
+      const rest = args.slice(1);
+      switch (sub) {
+        case "install":
+          return mockNpmInstall(rest);
+        case "start":
+          return "> project@1.0.0 start\n> node server.js\n\nServer running on http://localhost:3000";
+        case "run":
+          if (rest[0] === "build") {
+            return "> project@1.0.0 build\n> tsc && vite build\n\n✓ built in 2.3s";
+          }
+          return `Unknown npm run script: ${rest[0] || ""}`;
+        default:
+          return `npm: '${sub}' is not a known command. Try 'npm install', 'npm start', 'npm run build'.`;
+      }
+    }
+    case "pip": {
+      const sub = args[0] || "";
+      const rest = args.slice(1);
+      switch (sub) {
+        case "install":
+          return mockPipInstall(rest);
+        case "freeze":
+          return "certifi==2022.12.07\ncharset-normalizer==3.0.1\nidna==3.4\nrequests==2.28.2\nurllib3==1.26.14";
+        case "list":
+          return "Package    Version\n---------- -------\npip        22.3.1\nrequests   2.28.2\nsetuptools 65.5.0";
+        default:
+          return `pip: '${sub}' is not a known command. Try 'pip install', 'pip freeze'.`;
+      }
+    }
+    case "git": {
+      const sub = args[0] || "";
+      const rest = args.slice(1);
+      switch (sub) {
+        case "status":
+          return mockGitStatus();
+        case "add":
+          return mockGitAdd(rest);
+        case "commit":
+          if (rest[0] === "-m") {
+            const msg = rest.slice(1).join(" ");
+            return mockGitCommit(msg);
+          }
+          return "git commit: missing -m message";
+        case "push":
+          return "Everything up-to-date";
+        default:
+          return `git: '${sub}' is not a known command. Try 'git status', 'git add', 'git commit -m "msg"'.`;
+      }
+    }
+    case "dotnet": {
+      const sub = args[0] || "";
+      switch (sub) {
+        case "run":
+          return "Hello World!\n\nApplication finished.";
+        case "build":
+          return "MSBuild version 17.4.0 for .NET\n  Determining projects to restore...\n  All projects are up-to-date for restore.\n  YourApp -> /app/bin/Debug/net8.0/YourApp.dll\n\nBuild succeeded.";
+        default:
+          return `dotnet: '${sub}' is not a known command. Try 'dotnet run', 'dotnet build'.`;
+      }
+    }
+    case "csc": {
+      const file = args.find(a => a.endsWith(".cs"));
+      if (!file) return "csc: no C# source file specified";
+      return `Microsoft (R) Visual C# Compiler version 4.8.0\n\n${file} compiled successfully.`;
+    }
+    case "cs": {
+      // treat as csharp script (like `cs script.csx`)
+      const file = args.find(a => a.endsWith(".csx"));
+      if (!file) return "cs: no C# script file specified";
+      return `Hello from C# script!\n${file} executed.`;
+    }
+    case "mkdir": {
+      if (!args[0]) return "mkdir: missing operand";
+      // simple: add a new folder to the file list (mock)
+      const name = args[0];
+      const newEntry: FileEntry = {
+        id: `folder-${Date.now()}`,
+        name,
+        isFolder: true,
+        parentId: null,
+        depth: 0,
+      };
+      // We need to update the files array? But we cannot mutate it directly here.
+      // This is a mock – we'll just return a message.
+      return `mkdir: created directory '${name}' (mock)`;
+    }
+    case "touch": {
+      if (!args[0]) return "touch: missing file operand";
+      const name = args[0];
+      // similar mock
+      return `touch: created file '${name}' (mock)`;
+    }
+    case "rm": {
+      if (!args[0]) return "rm: missing operand";
+      return `rm: removed '${args[0]}' (mock)`;
+    }
+    case "exit":
+      return "exit: terminal will be closed (mock)";
+
     default:
       return `${cmd}: command not found`;
   }
@@ -3990,7 +4171,7 @@ export default function VSCode({ onLaunchGame }: Props) {
             codeforge@workspace
           </span>
           <span style={{ color: "#858585" }}> {dir} </span>
-          <span style={{ color: "#cccccc" }}>% </span>
+          <span style={{ color: "#cccccc" }}>%&nbsp;</span>
           <span style={{ color: "#d4d4d4" }}>{cmd}</span>
         </div>
       );
@@ -6477,9 +6658,7 @@ export default function VSCode({ onLaunchGame }: Props) {
                     <input
                       ref={termInputRef}
                       value={termInput}
-                      onChange={(e) =>
-                        setTermInput(e.target.value)
-                      }
+                      onChange={(e) => setTermInput(e.target.value)}
                       onKeyDown={handleTermKey}
                       style={{
                         background: "none",
@@ -6491,7 +6670,8 @@ export default function VSCode({ onLaunchGame }: Props) {
                         flex: 1,
                         caretColor: "#aeafad",
                         minWidth: 0,
-                        padding: 0,
+                        paddingLeft: "4px",  // <-- Add this line
+                        padding: "0 0 0 4px", // Or use this to keep other padding at 0
                       }}
                       autoComplete="off"
                       spellCheck={false}
