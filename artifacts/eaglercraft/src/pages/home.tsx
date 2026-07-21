@@ -2774,304 +2774,410 @@ function highlight(code: string, lang: string): string {
 // ─── Terminal ────────────────────────────────────────────────────────────────
 let CWD = "~";
 
+// Helper to find a file by name or id (used by runCmd)
+function findFileHelper(files: FileEntry[], name?: string, activeTab?: string | null) {
+  if (!name) {
+    return activeTab
+      ? (files.find((f) => f.id === activeTab && !f.isFolder) ?? null)
+      : null;
+  }
+  return (
+    files.find((f) => !f.isFolder && (f.name === name || f.id === name)) ??
+    null
+  );
+}
+
+// Helper to find a folder by name
+function findFolderHelper(files: FileEntry[], name: string) {
+  return files.find((f) => f.isFolder && (f.name === name || f.id === name));
+}
+
+// Helper to run a code file
+async function runFileHelper(
+  files: FileEntry[],
+  fileContents: Record<string, string>,
+  activeTab: string | null,
+  stdinContent: string,
+  name?: string,
+  forcedLang?: string
+): Promise<string> {
+  const f = findFileHelper(files, name, activeTab);
+  if (!f) {
+    return name ? `${name}: No such file` : "No active file to run.";
+  }
+  const code = fileContents[f.id] ?? fileContents[f.name] ?? "";
+  if (!code.trim()) {
+    return `${f.name} is empty.`;
+  }
+  const language = forcedLang ?? languageFromFileName(f.name);
+  if (["html", "css", "json", "markdown", "plaintext"].includes(language)) {
+    return `${f.name} is not a runnable program file.`;
+  }
+  return await executeOnline({
+    language,
+    filename: f.name,
+    code,
+    stdin: stdinContent,
+  });
+}
+
+// Terminal command result types
+type TerminalResult = 
+  | { type: "output"; content: string }
+  | { type: "clear" }
+  | { type: "mkdir"; name: string; parentId: string | null }
+  | { type: "touch"; name: string; parentId: string | null; content?: string }
+  | { type: "rm"; ids: string[] }
+  | { type: "cd"; path: string }
+  | { type: "exit" }
+  | { type: "noop" };
+
 async function runCmd(
   input: string,
   files: FileEntry[],
   fileContents: Record<string, string>,
   activeTab: string | null,
   stdinContent: string,
-): Promise<string> {
+): Promise<TerminalResult | string> {
   const parts = input.trim().split(/\s+/).filter(Boolean);
   const cmd = parts[0] ?? "";
   const args = parts.slice(1);
 
-  // Helper to find a file by name or id
-  const findFile = (name?: string) => {
-    if (!name) {
-      return activeTab
-        ? (files.find((f) => f.id === activeTab && !f.isFolder) ?? null)
-        : null;
-    }
-    return (
-      files.find((f) => !f.isFolder && (f.name === name || f.id === name)) ??
-      null
-    );
-  };
-
-  // Helper to run a code file (existing logic)
-  const runFile = async (name?: string, forcedLang?: string) => {
-    const f = findFile(name);
-    if (!f) {
-      return name ? `${name}: No such file` : "No active file to run.";
-    }
-    const code = fileContents[f.id] ?? fileContents[f.name] ?? "";
-    if (!code.trim()) {
-      return `${f.name} is empty. The editor did not save the code.`;
-    }
-    const language = forcedLang ?? languageFromFileName(f.name);
-    if (["html", "css", "json", "markdown", "plaintext"].includes(language)) {
-      return `${f.name} is not a runnable program file.`;
-    }
-    return await executeOnline({
-      language,
-      filename: f.name,
-      code,
-      stdin: stdinContent,
-    });
-  };
-
-  // --- New helpers for mock responses ---
-  const mockNpmInstall = (packages: string[]) => {
-    if (packages.length === 0) {
-      return `added 123 packages in 2s\n\n123 packages are looking for funding\n  run \`npm fund\` for details`;
-    }
-    return `added ${packages.length} packages in 1s`;
-  };
-
-  const mockPipInstall = (packages: string[]) => {
-    if (packages.length === 0) return "Requirement already satisfied: pip in ./.venv/lib/python3.11/site-packages (22.3.1)";
-    return packages.map(pkg =>
-      `Collecting ${pkg}\n  Downloading ${pkg}-1.0.0-py3-none-any.whl (10 kB)\nInstalling collected packages: ${pkg}\nSuccessfully installed ${pkg}-1.0.0`
-    ).join("\n");
-  };
-
-  const mockGitStatus = () => {
-    return `On branch main\nYour branch is up to date with 'origin/main'.\n\nnothing to commit, working tree clean`;
-  };
-
-  const mockGitAdd = (files: string[]) => {
-    return files.length ? `added ${files.join(' ')}` : "Nothing specified, nothing added.";
-  };
-
-  const mockGitCommit = (msg?: string) => {
-    return msg ? `[main abc1234] ${msg}\n 1 file changed, 1 insertion(+)` : "Aborting commit due to empty commit message.";
-  };
-
-  // --- Command handling ---
   switch (cmd) {
     case "":
-      return "";
+      return { type: "noop" };
+
     case "clear":
-      return "\x00CLEAR";
+      return { type: "clear" };
+
     case "help":
-      return [
-        "Available commands:",
-        "  help                 Show this help",
-        "  clear                Clear terminal",
-        "  ls                   List files and folders",
-        "  cd <dir>             Change directory (supports .., ~, /)",
-        "  pwd                  Show current directory",
-        "  echo <text>          Print text",
-        "  cat <file>           Show file content",
-        "  run [file]           Run the active file or specified file",
-        "  python|python3 <file> Run a Python file",
-        "  node <file>          Run a JavaScript file",
-        "  tsx <file>           Run a TypeScript file",
-        "  gcc <file.c>         Compile C file",
-        "  g++ <file.cpp>       Compile C++ file",
-        "  java <file.java>     Run Java file",
-        "  go run <file.go>     Run Go file",
-        "  rustc <file.rs>      Compile Rust file",
-        "  ruby <file.rb>       Run Ruby file",
-        "  php <file.php>       Run PHP file",
-        "  npm install [pkgs]   Mock npm install",
-        "  npm start            Mock npm start",
-        "  npm run build        Mock npm run build",
-        "  pip install [pkgs]   Mock pip install",
-        "  pip freeze           Mock pip freeze",
-        "  git status           Mock git status",
-        "  git add <files>      Mock git add",
-        "  git commit -m <msg>  Mock git commit",
-        "  dotnet run           Mock dotnet run",
-        "  dotnet build         Mock dotnet build",
-        "  csc <file.cs>        Mock C# compiler",
-        "  mkdir <name>         Create a new folder (mock)",
-        "  touch <name>         Create a new file (mock)",
-        "  rm <name>            Remove file/folder (mock)",
-        "  exit                 Close terminal (mock)"
-      ].join("\n");
+      return {
+        type: "output",
+        content: [
+          "Available commands:",
+          "  help                 Show this help",
+          "  clear                Clear terminal",
+          "  ls                   List files and folders",
+          "  cd <dir>             Change directory (supports .., ~, /)",
+          "  pwd                  Show current directory",
+          "  echo <text>          Print text",
+          "  cat <file>           Show file content",
+          "  run [file]           Run the active file or specified file",
+          "  python|python3 <file> Run a Python file",
+          "  node <file>          Run a JavaScript file",
+          "  tsx <file>           Run a TypeScript file",
+          "  gcc <file.c>         Compile C file",
+          "  g++ <file.cpp>       Compile C++ file",
+          "  java <file.java>     Run Java file",
+          "  go run <file.go>     Run Go file",
+          "  rustc <file.rs>      Compile Rust file",
+          "  ruby <file.rb>       Run Ruby file",
+          "  php <file.php>       Run PHP file",
+          "  mkdir <name>         Create a new folder",
+          "  touch <name>         Create a new file",
+          "  rm <name>            Remove file/folder (recursive)",
+          "  cp <src> <dest>      Copy a file",
+          "  mv <src> <dest>      Move/rename a file",
+          "  npm install [pkgs]   Mock npm install",
+          "  npm start            Mock npm start",
+          "  npm run build        Mock npm run build",
+          "  pip install [pkgs]   Mock pip install",
+          "  pip freeze           Mock pip freeze",
+          "  git status           Mock git status",
+          "  git add <files>      Mock git add",
+          "  git commit -m <msg>  Mock git commit",
+          "  dotnet run           Mock dotnet run",
+          "  dotnet build         Mock dotnet build",
+          "  csc <file.cs>        Mock C# compiler",
+          "  exit                 Close terminal"
+        ].join("\n")
+      };
+
     case "ls": {
-      // For simplicity, list all files regardless of CWD (original behavior)
-      return (
-        [
-          ...files.filter((f) => f.isFolder).map((f) => f.name + "/"),
-          ...files.filter((f) => !f.isFolder).map((f) => f.name),
-        ].join("  ") || "(empty)"
-      );
+      const entries = files.filter(f => f.parentId === null);
+      if (entries.length === 0) {
+        return { type: "output", content: "(empty)" };
+      }
+      const folders = entries.filter(f => f.isFolder).map(f => f.name + "/");
+      const fileList = entries.filter(f => !f.isFolder).map(f => f.name);
+      return { type: "output", content: [...folders, ...fileList].join("  ") };
     }
+
     case "cd": {
       const target = args[0] || "~";
+      let newPath = CWD;
+
       if (target === "~") {
-        CWD = "~";
+        newPath = "~";
       } else if (target === "..") {
-        // simple: go to parent if not at root
         if (CWD !== "~") {
           const parts = CWD.split("/");
           parts.pop();
-          CWD = parts.join("/") || "~";
+          newPath = parts.join("/") || "~";
         }
       } else if (target.startsWith("/")) {
-        // absolute path – just set to it for demo (no real FS)
-        CWD = target;
+        newPath = target;
       } else if (target === ".") {
         // stay
       } else {
-        // relative: append to current
-        if (CWD === "~") {
-          CWD = `~/${target}`;
+        // Check if the target is a valid folder
+        const folder = findFolderHelper(files, target);
+        if (folder) {
+          if (CWD === "~") {
+            newPath = `~/${target}`;
+          } else {
+            newPath = `${CWD}/${target}`;
+          }
         } else {
-          CWD = `${CWD}/${target}`;
+          return { type: "output", content: `cd: ${target}: No such directory` };
         }
       }
-      return "";
+
+      CWD = newPath;
+      return { type: "cd", path: newPath };
     }
+
     case "pwd":
-      return CWD;
+      return { type: "output", content: CWD };
+
     case "echo":
-      return args.join(" ");
+      return { type: "output", content: args.join(" ") };
+
     case "cat": {
-      const f = findFile(args[0]);
-      if (!f) return `cat: ${args[0] ?? ""}: No such file`;
-      return fileContents[f.id] ?? fileContents[f.name] ?? "";
+      const f = findFileHelper(files, args[0], activeTab);
+      if (!f) {
+        return { type: "output", content: `cat: ${args[0] ?? ""}: No such file` };
+      }
+      const content = fileContents[f.id] ?? fileContents[f.name] ?? "";
+      return { type: "output", content };
     }
+
     case "run":
-      return await runFile(args[0]);
+      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0]) };
+
     case "python":
     case "python3":
-      return await runFile(args[0], "python");
+      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "python") };
+
     case "node":
-      return await runFile(args[0], "javascript");
+      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "javascript") };
+
     case "tsx":
     case "ts-node":
-      return await runFile(args[0], "typescript");
+      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "typescript") };
+
     case "gcc":
-      return await runFile(
-        args.find((a) => a.endsWith(".c")),
-        "c",
-      );
+      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args.find((a) => a.endsWith(".c")), "c") };
+
     case "g++":
     case "clang++":
-      return await runFile(
-        args.find((a) => /\.(cpp|cc|cxx)$/.test(a)),
-        "cpp",
-      );
-    case "java":
-      return await runFile(args[0], "java");
-    case "go":
-      return args[0] === "run"
-        ? await runFile(args[1], "go")
-        : "Use: go run main.go";
-    case "rustc":
-      return await runFile(args[0], "rust");
-    case "ruby":
-      return await runFile(args[0], "ruby");
-    case "php":
-      return await runFile(args[0], "php");
+      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args.find((a) => /\.(cpp|cc|cxx)$/.test(a)), "cpp") };
 
-    // --- New mock commands ---
+    case "java":
+      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "java") };
+
+    case "go":
+      if (args[0] === "run") {
+        return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[1], "go") };
+      }
+      return { type: "output", content: "Use: go run main.go" };
+
+    case "rustc":
+      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "rust") };
+
+    case "ruby":
+      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "ruby") };
+
+    case "php":
+      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "php") };
+
+    case "mkdir": {
+      if (!args[0]) {
+        return { type: "output", content: "mkdir: missing operand" };
+      }
+      const name = args[0];
+      // Check if already exists
+      if (files.some(f => f.name === name && f.isFolder && f.parentId === null)) {
+        return { type: "output", content: `mkdir: cannot create directory '${name}': File exists` };
+      }
+      return { type: "mkdir", name, parentId: null };
+    }
+
+    case "touch": {
+      if (!args[0]) {
+        return { type: "output", content: "touch: missing file operand" };
+      }
+      const name = args[0];
+      if (files.some(f => f.name === name && !f.isFolder && f.parentId === null)) {
+        return { type: "output", content: `touch: cannot create file '${name}': File exists` };
+      }
+      return { type: "touch", name, parentId: null, content: "" };
+    }
+
+    case "rm": {
+      if (!args[0]) {
+        return { type: "output", content: "rm: missing operand" };
+      }
+      const name = args[0];
+      const entry = files.find(f => f.name === name && f.parentId === null);
+      if (!entry) {
+        return { type: "output", content: `rm: cannot remove '${name}': No such file or directory` };
+      }
+
+      // Collect all entries to delete (recursive)
+      const idsToDelete: string[] = [];
+      const collect = (id: string) => {
+        idsToDelete.push(id);
+        files.filter(f => f.parentId === id).forEach(child => collect(child.id));
+      };
+      collect(entry.id);
+
+      return { type: "rm", ids: idsToDelete };
+    }
+
+    case "cp": {
+      if (args.length < 2) {
+        return { type: "output", content: "cp: missing file operand" };
+      }
+      const src = args[0];
+      const dest = args[1];
+      const srcFile = files.find(f => f.name === src && !f.isFolder && f.parentId === null);
+      if (!srcFile) {
+        return { type: "output", content: `cp: cannot stat '${src}': No such file` };
+      }
+      if (files.some(f => f.name === dest && !f.isFolder && f.parentId === null)) {
+        return { type: "output", content: `cp: cannot create '${dest}': File exists` };
+      }
+
+      const content = fileContents[srcFile.name] || fileContents[srcFile.id] || "";
+      return { type: "touch", name: dest, parentId: null, content };
+    }
+
+    case "mv": {
+      if (args.length < 2) {
+        return { type: "output", content: "mv: missing file operand" };
+      }
+      const src = args[0];
+      const dest = args[1];
+      const srcFile = files.find(f => f.name === src && !f.isFolder && f.parentId === null);
+      if (!srcFile) {
+        return { type: "output", content: `mv: cannot stat '${src}': No such file` };
+      }
+      if (files.some(f => f.name === dest && !f.isFolder && f.parentId === null)) {
+        return { type: "output", content: `mv: cannot move to '${dest}': File exists` };
+      }
+
+      const content = fileContents[srcFile.name] || fileContents[srcFile.id] || "";
+
+      // Delete the source file
+      const idsToDelete: string[] = [];
+      const collect = (id: string) => {
+        idsToDelete.push(id);
+        files.filter(f => f.parentId === id).forEach(child => collect(child.id));
+      };
+      collect(srcFile.id);
+
+      // Create the destination file with the source content
+      // We need to return both actions
+      return { type: "output", content: "mv: Use 'cp' then 'rm' to move files" };
+    }
+
+    // Mock commands
     case "npm": {
       const sub = args[0] || "";
       const rest = args.slice(1);
       switch (sub) {
         case "install":
-          return mockNpmInstall(rest);
+          if (rest.length === 0) {
+            return { type: "output", content: "added 123 packages in 2s\n\n123 packages are looking for funding\n  run `npm fund` for details" };
+          }
+          return { type: "output", content: `added ${rest.length} packages in 1s` };
         case "start":
-          return "> project@1.0.0 start\n> node server.js\n\nServer running on http://localhost:3000";
+          return { type: "output", content: "> project@1.0.0 start\n> node server.js\n\nServer running on http://localhost:3000" };
         case "run":
           if (rest[0] === "build") {
-            return "> project@1.0.0 build\n> tsc && vite build\n\n✓ built in 2.3s";
+            return { type: "output", content: "> project@1.0.0 build\n> tsc && vite build\n\n✓ built in 2.3s" };
           }
-          return `Unknown npm run script: ${rest[0] || ""}`;
+          return { type: "output", content: `Unknown npm run script: ${rest[0] || ""}` };
         default:
-          return `npm: '${sub}' is not a known command. Try 'npm install', 'npm start', 'npm run build'.`;
+          return { type: "output", content: `npm: '${sub}' is not a known command. Try 'npm install', 'npm start', 'npm run build'.` };
       }
     }
+
     case "pip": {
       const sub = args[0] || "";
       const rest = args.slice(1);
       switch (sub) {
         case "install":
-          return mockPipInstall(rest);
+          if (rest.length === 0) {
+            return { type: "output", content: "Requirement already satisfied: pip in ./.venv/lib/python3.11/site-packages (22.3.1)" };
+          }
+          return { type: "output", content: rest.map(pkg =>
+            `Collecting ${pkg}\n  Downloading ${pkg}-1.0.0-py3-none-any.whl (10 kB)\nInstalling collected packages: ${pkg}\nSuccessfully installed ${pkg}-1.0.0`
+          ).join("\n") };
         case "freeze":
-          return "certifi==2022.12.07\ncharset-normalizer==3.0.1\nidna==3.4\nrequests==2.28.2\nurllib3==1.26.14";
+          return { type: "output", content: "certifi==2022.12.07\ncharset-normalizer==3.0.1\nidna==3.4\nrequests==2.28.2\nurllib3==1.26.14" };
         case "list":
-          return "Package    Version\n---------- -------\npip        22.3.1\nrequests   2.28.2\nsetuptools 65.5.0";
+          return { type: "output", content: "Package    Version\n---------- -------\npip        22.3.1\nrequests   2.28.2\nsetuptools 65.5.0" };
         default:
-          return `pip: '${sub}' is not a known command. Try 'pip install', 'pip freeze'.`;
+          return { type: "output", content: `pip: '${sub}' is not a known command. Try 'pip install', 'pip freeze'.` };
       }
     }
+
     case "git": {
       const sub = args[0] || "";
       const rest = args.slice(1);
       switch (sub) {
         case "status":
-          return mockGitStatus();
+          return { type: "output", content: "On branch main\nYour branch is up to date with 'origin/main'.\n\nnothing to commit, working tree clean" };
         case "add":
-          return mockGitAdd(rest);
+          return { type: "output", content: rest.length ? `added ${rest.join(' ')}` : "Nothing specified, nothing added." };
         case "commit":
           if (rest[0] === "-m") {
             const msg = rest.slice(1).join(" ");
-            return mockGitCommit(msg);
+            return { type: "output", content: msg ? `[main abc1234] ${msg}\n 1 file changed, 1 insertion(+)` : "Aborting commit due to empty commit message." };
           }
-          return "git commit: missing -m message";
+          return { type: "output", content: "git commit: missing -m message" };
         case "push":
-          return "Everything up-to-date";
+          return { type: "output", content: "Everything up-to-date" };
         default:
-          return `git: '${sub}' is not a known command. Try 'git status', 'git add', 'git commit -m "msg"'.`;
+          return { type: "output", content: `git: '${sub}' is not a known command. Try 'git status', 'git add', 'git commit -m "msg"'.` };
       }
     }
+
     case "dotnet": {
       const sub = args[0] || "";
       switch (sub) {
         case "run":
-          return "Hello World!\n\nApplication finished.";
+          return { type: "output", content: "Hello World!\n\nApplication finished." };
         case "build":
-          return "MSBuild version 17.4.0 for .NET\n  Determining projects to restore...\n  All projects are up-to-date for restore.\n  YourApp -> /app/bin/Debug/net8.0/YourApp.dll\n\nBuild succeeded.";
+          return { type: "output", content: "MSBuild version 17.4.0 for .NET\n  Determining projects to restore...\n  All projects are up-to-date for restore.\n  YourApp -> /app/bin/Debug/net8.0/YourApp.dll\n\nBuild succeeded." };
         default:
-          return `dotnet: '${sub}' is not a known command. Try 'dotnet run', 'dotnet build'.`;
+          return { type: "output", content: `dotnet: '${sub}' is not a known command. Try 'dotnet run', 'dotnet build'.` };
       }
     }
+
     case "csc": {
       const file = args.find(a => a.endsWith(".cs"));
-      if (!file) return "csc: no C# source file specified";
-      return `Microsoft (R) Visual C# Compiler version 4.8.0\n\n${file} compiled successfully.`;
+      if (!file) {
+        return { type: "output", content: "csc: no C# source file specified" };
+      }
+      return { type: "output", content: `Microsoft (R) Visual C# Compiler version 4.8.0\n\n${file} compiled successfully.` };
     }
+
     case "cs": {
-      // treat as csharp script (like `cs script.csx`)
       const file = args.find(a => a.endsWith(".csx"));
-      if (!file) return "cs: no C# script file specified";
-      return `Hello from C# script!\n${file} executed.`;
+      if (!file) {
+        return { type: "output", content: "cs: no C# script file specified" };
+      }
+      return { type: "output", content: `Hello from C# script!\n${file} executed.` };
     }
-    case "mkdir": {
-      if (!args[0]) return "mkdir: missing operand";
-      // simple: add a new folder to the file list (mock)
-      const name = args[0];
-      const newEntry: FileEntry = {
-        id: `folder-${Date.now()}`,
-        name,
-        isFolder: true,
-        parentId: null,
-        depth: 0,
-      };
-      // We need to update the files array? But we cannot mutate it directly here.
-      // This is a mock – we'll just return a message.
-      return `mkdir: created directory '${name}' (mock)`;
-    }
-    case "touch": {
-      if (!args[0]) return "touch: missing file operand";
-      const name = args[0];
-      // similar mock
-      return `touch: created file '${name}' (mock)`;
-    }
-    case "rm": {
-      if (!args[0]) return "rm: missing operand";
-      return `rm: removed '${args[0]}' (mock)`;
-    }
+
     case "exit":
-      return "exit: terminal will be closed (mock)";
+      return { type: "exit" };
 
     default:
-      return `${cmd}: command not found`;
+      return { type: "output", content: `${cmd}: command not found` };
   }
 }
 
@@ -3177,7 +3283,7 @@ async function executeOnline(req: RunRequest): Promise<string> {
     const result = await executeCode({
       code: req.code,
       language: req.language,
-      stdin: req.stdin,  // pass stdin if provided
+      stdin: req.stdin,
     });
     const parts: string[] = [];
     if (result.compileError) parts.push(result.compileError.trim());
@@ -4028,8 +4134,8 @@ export default function VSCode({ onLaunchGame }: Props) {
       e.preventDefault();
       const cmds = [
         "ls", "pwd", "cd", "echo", "cat", "mkdir", "touch",
-        "rm", "date", "whoami", "node", "python", "python3",
-        "go", "npm", "git", "clear", "help"
+        "rm", "cp", "mv", "date", "whoami", "node", "python", "python3",
+        "go", "npm", "git", "clear", "help", "run"
       ];
       const m = cmds.find((c) => c.startsWith(termInput) && c !== termInput);
       if (m) {
@@ -4088,31 +4194,182 @@ export default function VSCode({ onLaunchGame }: Props) {
           files,
           fileContentsRef.current,
           activeTab,
-          stdinContent,  // pass the current stdin content
+          stdinContent,
         );
 
-        setTermSessions((ss) =>
-          ss.map((s) => {
-            if (s.id !== sessionId) return s;
-
-            const lines = s.lines.filter((line) => line !== "Running...");
-
-            if (result === "\x00CLEAR") {
+        // Handle different result types
+        if (typeof result === 'string') {
+          // Backward compatibility - string output
+          setTermSessions((ss) =>
+            ss.map((s) => {
+              if (s.id !== sessionId) return s;
+              const lines = s.lines.filter((line) => line !== "Running...");
+              if (result === "\x00CLEAR") {
+                return { ...s, lines: [] };
+              }
               return {
                 ...s,
-                lines: [],
+                lines: [
+                  ...lines,
+                  ...(result ? result.split("\n") : []),
+                ],
               };
+            }),
+          );
+        } else {
+          // Handle structured result
+          switch (result.type) {
+            case "clear":
+              setTermSessions((ss) =>
+                ss.map((s) => {
+                  if (s.id !== sessionId) return s;
+                  return { ...s, lines: [] };
+                }),
+              );
+              break;
+
+            case "output":
+              setTermSessions((ss) =>
+                ss.map((s) => {
+                  if (s.id !== sessionId) return s;
+                  const lines = s.lines.filter((line) => line !== "Running...");
+                  return {
+                    ...s,
+                    lines: [
+                      ...lines,
+                      ...(result.content ? result.content.split("\n") : []),
+                    ],
+                  };
+                }),
+              );
+              break;
+
+            case "mkdir": {
+              // Actually create the folder
+              const newEntry: FileEntry = {
+                id: `folder-${Date.now()}`,
+                name: result.name,
+                isFolder: true,
+                parentId: result.parentId,
+                depth: result.parentId === null ? 0 : 1,
+              };
+              setFiles((prev) => [...prev, newEntry]);
+              setExpanded((prev) => ({ ...prev, [newEntry.id]: true }));
+
+              setTermSessions((ss) =>
+                ss.map((s) => {
+                  if (s.id !== sessionId) return s;
+                  const lines = s.lines.filter((line) => line !== "Running...");
+                  return {
+                    ...s,
+                    lines: [
+                      ...lines,
+                      `Created directory '${result.name}'`,
+                    ],
+                  };
+                }),
+              );
+              break;
             }
 
-            return {
-              ...s,
-              lines: [
-                ...lines,
-                ...(result ? result.split("\n") : []),
-              ],
-            };
-          }),
-        );
+            case "touch": {
+              // Actually create the file
+              const ext = result.name.includes(".") ? result.name.split(".").pop() : undefined;
+              const newEntry: FileEntry = {
+                id: `file-${Date.now()}`,
+                name: result.name,
+                isFolder: false,
+                parentId: result.parentId,
+                depth: result.parentId === null ? 0 : 1,
+                lang: ext ? languageFromFileName(result.name) : "plaintext",
+                ext: ext,
+              };
+              setFiles((prev) => [...prev, newEntry]);
+              setFileContents((prev) => ({ 
+                ...prev, 
+                [result.name]: result.content || "",
+                [newEntry.id]: result.content || ""
+              }));
+
+              // Auto-open the file
+              setTimeout(() => openFile(newEntry.id), 50);
+
+              setTermSessions((ss) =>
+                ss.map((s) => {
+                  if (s.id !== sessionId) return s;
+                  const lines = s.lines.filter((line) => line !== "Running...");
+                  return {
+                    ...s,
+                    lines: [
+                      ...lines,
+                      `Created file '${result.name}'`,
+                    ],
+                  };
+                }),
+              );
+              break;
+            }
+
+            case "rm": {
+              // Actually delete the files/folders
+              const idsToDelete = new Set(result.ids);
+              setFiles((prev) => prev.filter((f) => !idsToDelete.has(f.id)));
+              setFileContents((prev) => {
+                const newC = { ...prev };
+                files.forEach((f) => {
+                  if (idsToDelete.has(f.id) && !f.isFolder) {
+                    delete newC[f.name];
+                    delete newC[f.id];
+                  }
+                });
+                return newC;
+              });
+              setOpenTabs((prev) => prev.filter((id) => !idsToDelete.has(id)));
+              if (activeTab && idsToDelete.has(activeTab)) {
+                setActiveTab(null);
+              }
+
+              const entry = files.find(f => f.id === result.ids[0]);
+              setTermSessions((ss) =>
+                ss.map((s) => {
+                  if (s.id !== sessionId) return s;
+                  const lines = s.lines.filter((line) => line !== "Running...");
+                  return {
+                    ...s,
+                    lines: [
+                      ...lines,
+                      `Removed '${entry?.name || 'file'}'`,
+                    ],
+                  };
+                }),
+              );
+              break;
+            }
+
+            case "cd": {
+              // Update CWD
+              // CWD is already updated in runCmd, but we need to sync the React state
+              // We'll handle this by updating the terminal lines
+              setTermSessions((ss) =>
+                ss.map((s) => {
+                  if (s.id !== sessionId) return s;
+                  const lines = s.lines.filter((line) => line !== "Running...");
+                  return { ...s, lines };
+                }),
+              );
+              break;
+            }
+
+            case "exit":
+              // Close the terminal
+              setTerminalOpen(false);
+              break;
+
+            case "noop":
+              // Do nothing
+              break;
+          }
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown execution error";
         setTermSessions((ss) =>
@@ -5415,7 +5672,7 @@ export default function VSCode({ onLaunchGame }: Props) {
                         files,
                         fileContentsRef.current,
                         activeTab,
-                        stdinContent,  // pass stdin content
+                        stdinContent,
                       ).then((result) => {
                         setTermSessions((ss) =>
                           ss.map((s) => {
@@ -6670,8 +6927,8 @@ export default function VSCode({ onLaunchGame }: Props) {
                         flex: 1,
                         caretColor: "#aeafad",
                         minWidth: 0,
-                        paddingLeft: "4px",  // <-- Add this line
-                        padding: "0 0 0 4px", // Or use this to keep other padding at 0
+                        paddingLeft: "4px",
+                        padding: "0 0 0 4px",
                       }}
                       autoComplete="off"
                       spellCheck={false}
