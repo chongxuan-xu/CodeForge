@@ -2790,32 +2790,140 @@ function findFolderHelper(files: FileEntry[], name: string) {
   return files.find((f) => f.isFolder && (f.name === name || f.id === name));
 }
 
-async function runFileHelper(
-  files: FileEntry[],
-  fileContents: Record<string, string>,
-  activeTab: string | null,
-  stdinContent: string,
-  name?: string,
-  forcedLang?: string
-): Promise<string> {
-  const f = findFileHelper(files, name, activeTab);
-  if (!f) {
-    return name ? `${name}: No such file` : "No active file to run.";
+function languageFromFileName(name: string): string {
+  const lower = name.toLowerCase();
+
+  if (lower.endsWith(".py")) return "python";
+  if (lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".cjs"))
+    return "javascript";
+  if (lower.endsWith(".ts")) return "typescript";
+  if (lower.endsWith(".tsx")) return "typescriptreact";
+  if (lower.endsWith(".jsx")) return "javascriptreact";
+  if (lower.endsWith(".cpp") || lower.endsWith(".cc") || lower.endsWith(".cxx"))
+    return "cpp";
+  if (lower.endsWith(".c")) return "c";
+  if (lower.endsWith(".java")) return "java";
+  if (lower.endsWith(".go")) return "go";
+  if (lower.endsWith(".rs")) return "rust";
+  if (lower.endsWith(".rb")) return "ruby";
+  if (lower.endsWith(".php")) return "php";
+  if (lower.endsWith(".cs")) return "csharp";
+  if (lower.endsWith(".html") || lower.endsWith(".htm")) return "html";
+  if (lower.endsWith(".css")) return "css";
+  if (lower.endsWith(".json")) return "json";
+  if (lower.endsWith(".md")) return "markdown";
+
+  return "plaintext";
+}
+
+type RunRequest = {
+  language: string;
+  code: string;
+  filename: string;
+  stdin?: string;
+};
+
+async function executeOnline(req: RunRequest): Promise<string> {
+  try {
+    const result = await executeCode({
+      code: req.code,
+      language: req.language,
+      stdin: req.stdin,
+    });
+    const parts: string[] = [];
+    if (result.compileError) parts.push(result.compileError.trim());
+    if (result.stdout) parts.push(result.stdout.trim());
+    if (result.stderr && result.stderr !== result.compileError)
+      parts.push(result.stderr.trim());
+    if (!parts.length) {
+      return result.exitCode === 0
+        ? "Process exited with code 0"
+        : `Process exited with code ${result.exitCode}`;
+    }
+    return parts.join("\n");
+  } catch (err) {
+    return `Error: ${err instanceof Error ? err.message : String(err)}`;
   }
-  const code = fileContents[f.id] ?? fileContents[f.name] ?? "";
-  if (!code.trim()) {
-    return `${f.name} is empty.`;
+}
+
+// ─── Global abort controller for stopping running code ──────────────────────
+let currentAbortController: AbortController | null = null;
+
+function stopRunningCode() {
+  if (currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = null;
+    return true;
   }
-  const language = forcedLang ?? languageFromFileName(f.name);
-  if (["html", "css", "json", "markdown", "plaintext"].includes(language)) {
-    return `${f.name} is not a runnable program file.`;
+  return false;
+}
+
+async function executeOnlineWithAbort(req: RunRequest, onStreamOutput?: (chunk: string) => void): Promise<string> {
+  // Create a new abort controller
+  currentAbortController = new AbortController();
+  const signal = currentAbortController.signal;
+
+  try {
+    // Check if already aborted
+    if (signal.aborted) {
+      return "Execution cancelled by user (Ctrl+C)";
+    }
+
+    const result = await executeCode({
+      code: req.code,
+      language: req.language,
+      stdin: req.stdin,
+    });
+
+    // Clear the abort controller when done
+    currentAbortController = null;
+
+    const parts: string[] = [];
+    if (result.compileError) {
+      if (onStreamOutput) {
+        onStreamOutput(result.compileError.trim() + '\n');
+      } else {
+        parts.push(result.compileError.trim());
+      }
+    }
+    if (result.stdout) {
+      // Stream output in chunks if callback provided
+      if (onStreamOutput) {
+        const lines = result.stdout.split('\n');
+        for (const line of lines) {
+          if (signal.aborted) {
+            return "Execution cancelled by user (Ctrl+C)";
+          }
+          if (line.trim()) {
+            onStreamOutput(line + '\n');
+            // Small delay for UI updates
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+        }
+      } else {
+        parts.push(result.stdout.trim());
+      }
+    }
+    if (result.stderr && result.stderr !== result.compileError) {
+      if (onStreamOutput) {
+        onStreamOutput(result.stderr.trim() + '\n');
+      } else {
+        parts.push(result.stderr.trim());
+      }
+    }
+    if (!parts.length && !onStreamOutput) {
+      return result.exitCode === 0
+        ? "Process exited with code 0"
+        : `Process exited with code ${result.exitCode}`;
+    }
+    return parts.join("\n");
+  } catch (err) {
+    currentAbortController = null;
+    if (err instanceof Error && err.name === 'AbortError') {
+      return "Execution cancelled by user (Ctrl+C)";
+    }
+    return `Error: ${err instanceof Error ? err.message : String(err)}`;
   }
-  return await executeOnline({
-    language,
-    filename: f.name,
-    code,
-    stdin: stdinContent,
-  });
 }
 
 type TerminalResult = 
@@ -2938,33 +3046,26 @@ async function runCmd(
       return { type: "output", content };
     }
     case "run":
-      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0]) };
     case "python":
     case "python3":
-      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "python") };
     case "node":
-      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "javascript") };
     case "tsx":
-    case "ts-node":
-      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "typescript") };
     case "gcc":
-      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args.find((a) => a.endsWith(".c")), "c") };
     case "g++":
     case "clang++":
-      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args.find((a) => /\.(cpp|cc|cxx)$/.test(a)), "cpp") };
     case "java":
-      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "java") };
-    case "go":
+    case "rustc":
+    case "ruby":
+    case "php": {
+      // These are handled in the main component with streaming
+      return { type: "output", content: "Use the Run button or type 'run <file>' in terminal" };
+    }
+    case "go": {
       if (args[0] === "run") {
-        return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[1], "go") };
+        return { type: "output", content: "Use the Run button or type 'run <file>' in terminal" };
       }
       return { type: "output", content: "Use: go run main.go" };
-    case "rustc":
-      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "rust") };
-    case "ruby":
-      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "ruby") };
-    case "php":
-      return { type: "output", content: await runFileHelper(files, fileContents, activeTab, stdinContent, args[0], "php") };
+    }
     case "mkdir": {
       if (!args[0]) {
         return { type: "output", content: "mkdir: missing operand" };
@@ -3194,62 +3295,6 @@ const ALL_EXTENSIONS = [
     author: "oderwat",
   },
 ];
-
-type RunRequest = {
-  language: string;
-  code: string;
-  filename: string;
-  stdin?: string;
-};
-
-function languageFromFileName(name: string): string {
-  const lower = name.toLowerCase();
-
-  if (lower.endsWith(".py")) return "python";
-  if (lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".cjs"))
-    return "javascript";
-  if (lower.endsWith(".ts")) return "typescript";
-  if (lower.endsWith(".tsx")) return "typescriptreact";
-  if (lower.endsWith(".jsx")) return "javascriptreact";
-  if (lower.endsWith(".cpp") || lower.endsWith(".cc") || lower.endsWith(".cxx"))
-    return "cpp";
-  if (lower.endsWith(".c")) return "c";
-  if (lower.endsWith(".java")) return "java";
-  if (lower.endsWith(".go")) return "go";
-  if (lower.endsWith(".rs")) return "rust";
-  if (lower.endsWith(".rb")) return "ruby";
-  if (lower.endsWith(".php")) return "php";
-  if (lower.endsWith(".cs")) return "csharp";
-  if (lower.endsWith(".html") || lower.endsWith(".htm")) return "html";
-  if (lower.endsWith(".css")) return "css";
-  if (lower.endsWith(".json")) return "json";
-  if (lower.endsWith(".md")) return "markdown";
-
-  return "plaintext";
-}
-
-async function executeOnline(req: RunRequest): Promise<string> {
-  try {
-    const result = await executeCode({
-      code: req.code,
-      language: req.language,
-      stdin: req.stdin,
-    });
-    const parts: string[] = [];
-    if (result.compileError) parts.push(result.compileError.trim());
-    if (result.stdout) parts.push(result.stdout.trim());
-    if (result.stderr && result.stderr !== result.compileError)
-      parts.push(result.stderr.trim());
-    if (!parts.length) {
-      return result.exitCode === 0
-        ? "Process exited with code 0"
-        : `Process exited with code ${result.exitCode}`;
-    }
-    return parts.join("\n");
-  } catch (err) {
-    return `Error: ${err instanceof Error ? err.message : String(err)}`;
-  }
-}
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function VSCode({ onLaunchGame }: Props) {
@@ -4052,7 +4097,41 @@ export default function VSCode({ onLaunchGame }: Props) {
     setNewItemName("");
   };
 
+  // ─── terminalRunning state and useEffect for Ctrl+C ──────────────────────
   const [terminalRunning, setTerminalRunning] = useState(false);
+
+  // ─── Keyboard shortcut for Ctrl+C to stop execution ──────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === 'c') {
+        // Only stop if there's something running
+        if (terminalRunning) {
+          e.preventDefault();
+          const stopped = stopRunningCode();
+          if (stopped) {
+            // Show message in terminal
+            setTermSessions((ss) =>
+              ss.map((s) => {
+                if (s.id !== activeTermId) return s;
+                return {
+                  ...s,
+                  lines: [
+                    ...s.lines,
+                    "^C",
+                    "Execution stopped by user (Ctrl+C)",
+                  ],
+                };
+              })
+            );
+            setTerminalRunning(false);
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [terminalRunning, activeTermId]);
 
   const termInput = termInputs[activeTermId] ?? "";
   const setTermInput = (v: string) =>
@@ -4099,7 +4178,29 @@ export default function VSCode({ onLaunchGame }: Props) {
     }
 
     if (e.key === "c" && e.ctrlKey) {
-      setTermInput("");
+      e.preventDefault();
+      // Check if something is running
+      if (terminalRunning) {
+        const stopped = stopRunningCode();
+        if (stopped) {
+          setTermSessions((ss) =>
+            ss.map((s) => {
+              if (s.id !== activeTermId) return s;
+              return {
+                ...s,
+                lines: [
+                  ...s.lines,
+                  "^C",
+                  "Execution stopped by user (Ctrl+C)",
+                ],
+              };
+            })
+          );
+          setTerminalRunning(false);
+        }
+      } else {
+        setTermInput("");
+      }
       return;
     }
 
@@ -4115,6 +4216,7 @@ export default function VSCode({ onLaunchGame }: Props) {
 
       setTerminalRunning(true);
 
+      // Show command immediately
       setTermSessions((ss) =>
         ss.map((s) =>
           s.id === sessionId
@@ -4123,11 +4225,10 @@ export default function VSCode({ onLaunchGame }: Props) {
                 lines: [
                   ...s.lines,
                   `\x02${CWD}\x03${input}`,
-                  "Running...",
                 ],
               }
             : s,
-        ),
+        )
       );
 
       setTermHistories((h) => ({
@@ -4142,32 +4243,142 @@ export default function VSCode({ onLaunchGame }: Props) {
 
       setTermInput("");
 
-      try {
-        const result = await runCmd(
-          input,
-          files,
-          fileContentsRef.current,
-          activeTab,
-          stdinContent,
-        );
+      // Create streaming output handler
+      let accumulatedOutput = "";
+      let lastUpdateTime = 0;
+      let updateTimeout: NodeJS.Timeout | null = null;
 
-        if (typeof result === 'string') {
-          setTermSessions((ss) =>
-            ss.map((s) => {
-              if (s.id !== sessionId) return s;
-              const lines = s.lines.filter((line) => line !== "Running...");
-              if (result === "\x00CLEAR") {
-                return { ...s, lines: [] };
+      const flushOutput = () => {
+        if (!accumulatedOutput) return;
+        const toSend = accumulatedOutput;
+        accumulatedOutput = "";
+
+        setTermSessions((ss) =>
+          ss.map((s) => {
+            if (s.id !== sessionId) return s;
+            const lines = [...s.lines];
+            const parts = toSend.split('\n');
+            for (let i = 0; i < parts.length; i++) {
+              const part = parts[i];
+              if (i === 0 && lines.length > 0 && !lines[lines.length - 1].startsWith('\x02')) {
+                lines[lines.length - 1] = lines[lines.length - 1] + part;
+              } else if (part || i < parts.length - 1) {
+                lines.push(part || '');
               }
-              return {
-                ...s,
-                lines: [
-                  ...lines,
-                  ...(result ? result.split("\n") : []),
-                ],
-              };
-            }),
+            }
+            return { ...s, lines };
+          })
+        );
+      };
+
+      const streamOutput = (chunk: string) => {
+        accumulatedOutput += chunk;
+
+        const now = Date.now();
+        if (now - lastUpdateTime > 50) {
+          lastUpdateTime = now;
+          flushOutput();
+          if (updateTimeout) {
+            clearTimeout(updateTimeout);
+            updateTimeout = null;
+          }
+        } else if (!updateTimeout) {
+          updateTimeout = setTimeout(() => {
+            updateTimeout = null;
+            flushOutput();
+          }, 50);
+        }
+      };
+
+      try {
+        // Get the file to run
+        const parts = input.split(/\s+/);
+        const cmd = parts[0];
+        const args = parts.slice(1);
+
+        let result: TerminalResult | string;
+
+        // Handle run commands with streaming
+        if (cmd === "run" || cmd === "python" || cmd === "python3" || 
+            cmd === "node" || cmd === "tsx" || cmd === "go" || 
+            cmd === "rustc" || cmd === "ruby" || cmd === "php") {
+
+          // Find the file
+          let fileName = args[0];
+          if (!fileName && activeTab) {
+            const f = files.find(x => x.id === activeTab);
+            if (f) fileName = f.name;
+          }
+
+          if (!fileName) {
+            result = "No file specified";
+          } else {
+            const f = findFileHelper(files, fileName, activeTab);
+            if (!f) {
+              result = `${fileName}: No such file`;
+            } else {
+              const code = fileContentsRef.current[f.id] ?? fileContentsRef.current[f.name] ?? "";
+              if (!code.trim()) {
+                result = `${f.name} is empty.`;
+              } else {
+                const language = cmd === "python" || cmd === "python3" ? "python" :
+                               cmd === "node" ? "javascript" :
+                               cmd === "tsx" ? "typescript" :
+                               cmd === "go" ? "go" :
+                               cmd === "rustc" ? "rust" :
+                               cmd === "ruby" ? "ruby" :
+                               cmd === "php" ? "php" :
+                               languageFromFileName(f.name);
+
+                if (["html", "css", "json", "markdown", "plaintext"].includes(language)) {
+                  result = `${f.name} is not a runnable program file.`;
+                } else {
+                  const output = await executeOnlineWithAbort({
+                    language,
+                    filename: f.name,
+                    code,
+                    stdin: stdinContent,
+                  }, streamOutput);
+
+                  // Flush remaining output
+                  if (updateTimeout) {
+                    clearTimeout(updateTimeout);
+                    updateTimeout = null;
+                  }
+                  flushOutput();
+
+                  result = output;
+                }
+              }
+            }
+          }
+        } else {
+          // For other commands, use the regular runCmd
+          const cmdResult = await runCmd(
+            input,
+            files,
+            fileContentsRef.current,
+            activeTab,
+            stdinContent
           );
+          result = cmdResult;
+        }
+
+        // Handle the result
+        if (typeof result === 'string') {
+          if (result) {
+            setTermSessions((ss) =>
+              ss.map((s) => {
+                if (s.id !== sessionId) return s;
+                const lines = [...s.lines];
+                const resultLines = result.split('\n');
+                for (const line of resultLines) {
+                  if (line) lines.push(line);
+                }
+                return { ...s, lines };
+              })
+            );
+          }
         } else {
           switch (result.type) {
             case "clear":
@@ -4175,24 +4386,24 @@ export default function VSCode({ onLaunchGame }: Props) {
                 ss.map((s) => {
                   if (s.id !== sessionId) return s;
                   return { ...s, lines: [] };
-                }),
+                })
               );
               break;
 
             case "output":
-              setTermSessions((ss) =>
-                ss.map((s) => {
-                  if (s.id !== sessionId) return s;
-                  const lines = s.lines.filter((line) => line !== "Running...");
-                  return {
-                    ...s,
-                    lines: [
-                      ...lines,
-                      ...(result.content ? result.content.split("\n") : []),
-                    ],
-                  };
-                }),
-              );
+              if (result.content) {
+                setTermSessions((ss) =>
+                  ss.map((s) => {
+                    if (s.id !== sessionId) return s;
+                    const lines = [...s.lines];
+                    const resultLines = result.content.split('\n');
+                    for (const line of resultLines) {
+                      if (line) lines.push(line);
+                    }
+                    return { ...s, lines };
+                  })
+                );
+              }
               break;
 
             case "mkdir": {
@@ -4205,20 +4416,6 @@ export default function VSCode({ onLaunchGame }: Props) {
               };
               setFiles((prev) => [...prev, newEntry]);
               setExpanded((prev) => ({ ...prev, [newEntry.id]: true }));
-
-              setTermSessions((ss) =>
-                ss.map((s) => {
-                  if (s.id !== sessionId) return s;
-                  const lines = s.lines.filter((line) => line !== "Running...");
-                  return {
-                    ...s,
-                    lines: [
-                      ...lines,
-                      `Created directory '${result.name}'`,
-                    ],
-                  };
-                }),
-              );
               break;
             }
 
@@ -4239,22 +4436,7 @@ export default function VSCode({ onLaunchGame }: Props) {
                 [result.name]: result.content || "",
                 [newEntry.id]: result.content || ""
               }));
-
               setTimeout(() => openFile(newEntry.id), 50);
-
-              setTermSessions((ss) =>
-                ss.map((s) => {
-                  if (s.id !== sessionId) return s;
-                  const lines = s.lines.filter((line) => line !== "Running...");
-                  return {
-                    ...s,
-                    lines: [
-                      ...lines,
-                      `Created file '${result.name}'`,
-                    ],
-                  };
-                }),
-              );
               break;
             }
 
@@ -4275,34 +4457,12 @@ export default function VSCode({ onLaunchGame }: Props) {
               if (activeTab && idsToDelete.has(activeTab)) {
                 setActiveTab(null);
               }
-
-              const entry = files.find(f => f.id === result.ids[0]);
-              setTermSessions((ss) =>
-                ss.map((s) => {
-                  if (s.id !== sessionId) return s;
-                  const lines = s.lines.filter((line) => line !== "Running...");
-                  return {
-                    ...s,
-                    lines: [
-                      ...lines,
-                      `Removed '${entry?.name || 'file'}'`,
-                    ],
-                  };
-                }),
-              );
               break;
             }
 
-            case "cd": {
-              setTermSessions((ss) =>
-                ss.map((s) => {
-                  if (s.id !== sessionId) return s;
-                  const lines = s.lines.filter((line) => line !== "Running...");
-                  return { ...s, lines };
-                }),
-              );
+            case "cd":
+              // CWD already updated in runCmd
               break;
-            }
 
             case "exit":
               setTerminalOpen(false);
@@ -4320,21 +4480,17 @@ export default function VSCode({ onLaunchGame }: Props) {
             return {
               ...s,
               lines: [
-                ...s.lines.filter((line) => line !== "Running..."),
+                ...s.lines,
                 `Error: ${message}`,
               ],
             };
-          }),
+          })
         );
       } finally {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            setTerminalRunning(false);
-            setTimeout(() => {
-              termInputRef.current?.focus();
-            }, 0);
-          });
-        });
+        setTerminalRunning(false);
+        setTimeout(() => {
+          termInputRef.current?.focus();
+        }, 0);
       }
     }
   };
@@ -4407,18 +4563,13 @@ export default function VSCode({ onLaunchGame }: Props) {
     if (!draggedItem) return;
     if (draggedItem.id === targetEntry.id) return;
 
-    // Cannot drag into yourself
-    if (draggedItem.id === targetEntry.id) return;
-
-    // If target is a folder, move dragged item into it
     if (targetEntry.isFolder) {
-      // Check if we're trying to move a parent into its child
       let current = targetEntry.parentId;
       while (current) {
         const parent = files.find(f => f.id === current);
         if (parent?.id === draggedItem.id) {
           setDraggedItem(null);
-          return; // Can't move a folder into its own child
+          return;
         }
         current = parent?.parentId || null;
       }
@@ -4429,25 +4580,18 @@ export default function VSCode({ onLaunchGame }: Props) {
             const depth = targetEntry.depth + 1;
             return { ...f, parentId: targetEntry.id, depth };
           }
-          // Update depths of children if needed
-          if (f.parentId === draggedItem.id) {
-            // This would require updating all children - simplified version
-            return f;
-          }
           return f;
         })
       );
 
       setExpanded(prev => ({ ...prev, [targetEntry.id]: true }));
     } else {
-      // Move to same level as target (reorder)
       const targetParent = targetEntry.parentId;
       const draggedIndex = files.findIndex(f => f.id === draggedItem.id);
       const targetIndex = files.findIndex(f => f.id === targetEntry.id);
 
       if (draggedIndex === -1 || targetIndex === -1) return;
 
-      // Only allow reordering within the same parent
       if (files[draggedIndex].parentId !== targetParent) return;
 
       setFiles(prev => {
@@ -4510,6 +4654,7 @@ export default function VSCode({ onLaunchGame }: Props) {
   const installedList = extList.filter((e) => installedExts.has(e.id));
   const availableList = extList.filter((e) => !installedExts.has(e.id));
 
+  // ─── Render function ──────────────────────────────────────────────────────
   return (
     <div
       style={{
@@ -5702,7 +5847,7 @@ export default function VSCode({ onLaunchGame }: Props) {
                                 ],
                               }
                             : s,
-                        ),
+                        )
                       );
                       setTermHistories((h) => ({
                         ...h,
@@ -5711,31 +5856,56 @@ export default function VSCode({ onLaunchGame }: Props) {
                           100,
                         ),
                       }));
-                      runCmd(
-                        fullCmd,
-                        files,
-                        fileContentsRef.current,
-                        activeTab,
-                        stdinContent,
-                      ).then((result) => {
+                      // Use the streaming execution
+                      const streamOutput = (chunk: string) => {
                         setTermSessions((ss) =>
                           ss.map((s) => {
                             if (s.id !== sessionId) return s;
-                            const lines = s.lines.filter(
-                              (l) => l !== "Running...",
-                            );
-                            if (result === "\x00CLEAR")
-                              return { ...s, lines: [] };
-                            return {
-                              ...s,
-                              lines: [
-                                ...lines,
-                                ...(result ? result.split("\n") : []),
-                              ],
-                            };
-                          }),
+                            const lines = [...s.lines];
+                            const parts = chunk.split('\n');
+                            for (let i = 0; i < parts.length; i++) {
+                              const part = parts[i];
+                              if (i === 0 && lines.length > 0 && !lines[lines.length - 1].startsWith('\x02')) {
+                                lines[lines.length - 1] = lines[lines.length - 1] + part;
+                              } else if (part || i < parts.length - 1) {
+                                lines.push(part || '');
+                              }
+                            }
+                            return { ...s, lines };
+                          })
                         );
-                      });
+                      };
+
+                      const fileName = activeFile.name;
+                      const f = findFileHelper(files, fileName, activeTab);
+                      if (f) {
+                        const code = fileContentsRef.current[f.id] ?? fileContentsRef.current[f.name] ?? "";
+                        const language = languageFromFileName(f.name);
+                        executeOnlineWithAbort({
+                          language,
+                          filename: f.name,
+                          code,
+                          stdin: stdinContent,
+                        }, streamOutput).then((result) => {
+                          setTermSessions((ss) =>
+                            ss.map((s) => {
+                              if (s.id !== sessionId) return s;
+                              const lines = s.lines.filter(
+                                (l) => l !== "Running...",
+                              );
+                              return {
+                                ...s,
+                                lines: [
+                                  ...lines,
+                                  ...(result ? result.split("\n") : []),
+                                ],
+                              };
+                            })
+                          );
+                          setTerminalRunning(false);
+                        });
+                        setTerminalRunning(true);
+                      }
                     }}
                     style={{
                       display: "flex",
