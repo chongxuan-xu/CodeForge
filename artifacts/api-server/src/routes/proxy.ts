@@ -45,7 +45,7 @@ router.get("/proxy/client", async (req, res): Promise<void> => {
 
   body = body.replace(
     /(<head[^>]*>)/i,
-    `$1<base href="${EAGLERCRAFT_ORIGIN}${CLIENT_PATH}/">`
+    `$1<base href="${EAGLERCRAFT_ORIGIN}${CLIENT_PATH}/">`,
   );
 
   res.status(upstream.status).send(body);
@@ -65,7 +65,8 @@ router.get("/proxy/asset{/*path}", async (req, res): Promise<void> => {
     redirect: "follow",
   });
 
-  const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
+  const contentType =
+    upstream.headers.get("content-type") ?? "application/octet-stream";
   res.setHeader("Content-Type", contentType);
   res.setHeader("Cache-Control", "public, max-age=3600");
 
