@@ -4,6 +4,7 @@ const VERSION_CLIENTS: Record<string, { label: string; client: string }> = {
   "1.5.2": { label: "1.5.2", client: "client_1.5.2.html" },
   "1.8.8": { label: "1.8.8", client: "client.html" },
   "1.12.2": { label: "1.12.2", client: "client_1.12.2.html" },
+  "1.12.2_u3": { label: "1.12.2 U3", client: "client_1.12.2_u3.html" },
 };
 
 interface PlayProps {

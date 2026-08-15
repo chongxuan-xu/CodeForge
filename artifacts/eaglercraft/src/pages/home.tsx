@@ -166,7 +166,7 @@ function FileIcon({ name, ext }: { name: string; ext?: string }) {
     ? "gitignore"
     : (ext ?? name.split(".").pop() ?? "").toLowerCase();
 
-  if (!key || key === "txt" || key === "document") {
+  if (!key || key === "txtΩ≈c" || key === "document") {
     return <PlainFileIcon />;
   }
 
@@ -3867,14 +3867,21 @@ export default function VSCode({ onLaunchGame }: Props) {
         onLaunchGame("1.5.2");
         return;
       }
+
       if (val === "e1.8.8") {
         onLaunchGame("1.8.8");
         return;
       }
-      if (val === "e1.12.2") {
+
+      if (val === "e1.12.2 u2") {
         onLaunchGame("1.12.2");
         return;
       }
+
+      if (val === "e1.12.2 u3") {
+        onLaunchGame("1.12.2_u3");
+        return;
+      }handleDragEnd
     }
   };
 
