@@ -2774,15 +2774,18 @@ function highlight(code: string, lang: string): string {
 // ─── Terminal ────────────────────────────────────────────────────────────────
 let CWD = "~";
 
-function findFileHelper(files: FileEntry[], name?: string, activeTab?: string | null) {
+function findFileHelper(
+  files: FileEntry[],
+  name?: string,
+  activeTab?: string | null,
+) {
   if (!name) {
     return activeTab
       ? (files.find((f) => f.id === activeTab && !f.isFolder) ?? null)
       : null;
   }
   return (
-    files.find((f) => !f.isFolder && (f.name === name || f.id === name)) ??
-    null
+    files.find((f) => !f.isFolder && (f.name === name || f.id === name)) ?? null
   );
 }
 
@@ -2858,7 +2861,10 @@ function stopRunningCode() {
   return false;
 }
 
-async function executeOnlineWithAbort(req: RunRequest, onStreamOutput?: (chunk: string) => void): Promise<string> {
+async function executeOnlineWithAbort(
+  req: RunRequest,
+  onStreamOutput?: (chunk: string) => void,
+): Promise<string> {
   // Create a new abort controller
   currentAbortController = new AbortController();
   const signal = currentAbortController.signal;
@@ -2881,7 +2887,7 @@ async function executeOnlineWithAbort(req: RunRequest, onStreamOutput?: (chunk: 
     const parts: string[] = [];
     if (result.compileError) {
       if (onStreamOutput) {
-        onStreamOutput(result.compileError.trim() + '\n');
+        onStreamOutput(result.compileError.trim() + "\n");
       } else {
         parts.push(result.compileError.trim());
       }
@@ -2889,15 +2895,15 @@ async function executeOnlineWithAbort(req: RunRequest, onStreamOutput?: (chunk: 
     if (result.stdout) {
       // Stream output in chunks if callback provided
       if (onStreamOutput) {
-        const lines = result.stdout.split('\n');
+        const lines = result.stdout.split("\n");
         for (const line of lines) {
           if (signal.aborted) {
             return "Execution cancelled by user (Ctrl+C)";
           }
           if (line.trim()) {
-            onStreamOutput(line + '\n');
+            onStreamOutput(line + "\n");
             // Small delay for UI updates
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await new Promise((resolve) => setTimeout(resolve, 10));
           }
         }
       } else {
@@ -2906,7 +2912,7 @@ async function executeOnlineWithAbort(req: RunRequest, onStreamOutput?: (chunk: 
     }
     if (result.stderr && result.stderr !== result.compileError) {
       if (onStreamOutput) {
-        onStreamOutput(result.stderr.trim() + '\n');
+        onStreamOutput(result.stderr.trim() + "\n");
       } else {
         parts.push(result.stderr.trim());
       }
@@ -2919,14 +2925,14 @@ async function executeOnlineWithAbort(req: RunRequest, onStreamOutput?: (chunk: 
     return parts.join("\n");
   } catch (err) {
     currentAbortController = null;
-    if (err instanceof Error && err.name === 'AbortError') {
+    if (err instanceof Error && err.name === "AbortError") {
       return "Execution cancelled by user (Ctrl+C)";
     }
     return `Error: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
 
-type TerminalResult = 
+type TerminalResult =
   | { type: "output"; content: string }
   | { type: "clear" }
   | { type: "mkdir"; name: string; parentId: string | null }
@@ -2991,16 +2997,18 @@ async function runCmd(
           "  dotnet run           Mock dotnet run",
           "  dotnet build         Mock dotnet build",
           "  csc <file.cs>        Mock C# compiler",
-          "  exit                 Close terminal"
-        ].join("\n")
+          "  exit                 Close terminal",
+        ].join("\n"),
       };
     case "ls": {
-      const entries = files.filter(f => f.parentId === null);
+      const entries = files.filter((f) => f.parentId === null);
       if (entries.length === 0) {
         return { type: "output", content: "(empty)" };
       }
-      const folders = entries.filter(f => f.isFolder).map(f => f.name + "/");
-      const fileList = entries.filter(f => !f.isFolder).map(f => f.name);
+      const folders = entries
+        .filter((f) => f.isFolder)
+        .map((f) => f.name + "/");
+      const fileList = entries.filter((f) => !f.isFolder).map((f) => f.name);
       return { type: "output", content: [...folders, ...fileList].join("  ") };
     }
     case "cd": {
@@ -3027,7 +3035,10 @@ async function runCmd(
             newPath = `${CWD}/${target}`;
           }
         } else {
-          return { type: "output", content: `cd: ${target}: No such directory` };
+          return {
+            type: "output",
+            content: `cd: ${target}: No such directory`,
+          };
         }
       }
       CWD = newPath;
@@ -3040,7 +3051,10 @@ async function runCmd(
     case "cat": {
       const f = findFileHelper(files, args[0], activeTab);
       if (!f) {
-        return { type: "output", content: `cat: ${args[0] ?? ""}: No such file` };
+        return {
+          type: "output",
+          content: `cat: ${args[0] ?? ""}: No such file`,
+        };
       }
       const content = fileContents[f.id] ?? fileContents[f.name] ?? "";
       return { type: "output", content };
@@ -3058,11 +3072,17 @@ async function runCmd(
     case "ruby":
     case "php": {
       // These are handled in the main component with streaming
-      return { type: "output", content: "Use the Run button or type 'run <file>' in terminal" };
+      return {
+        type: "output",
+        content: "Use the Run button or type 'run <file>' in terminal",
+      };
     }
     case "go": {
       if (args[0] === "run") {
-        return { type: "output", content: "Use the Run button or type 'run <file>' in terminal" };
+        return {
+          type: "output",
+          content: "Use the Run button or type 'run <file>' in terminal",
+        };
       }
       return { type: "output", content: "Use: go run main.go" };
     }
@@ -3071,8 +3091,13 @@ async function runCmd(
         return { type: "output", content: "mkdir: missing operand" };
       }
       const name = args[0];
-      if (files.some(f => f.name === name && f.isFolder && f.parentId === null)) {
-        return { type: "output", content: `mkdir: cannot create directory '${name}': File exists` };
+      if (
+        files.some((f) => f.name === name && f.isFolder && f.parentId === null)
+      ) {
+        return {
+          type: "output",
+          content: `mkdir: cannot create directory '${name}': File exists`,
+        };
       }
       return { type: "mkdir", name, parentId: null };
     }
@@ -3081,8 +3106,13 @@ async function runCmd(
         return { type: "output", content: "touch: missing file operand" };
       }
       const name = args[0];
-      if (files.some(f => f.name === name && !f.isFolder && f.parentId === null)) {
-        return { type: "output", content: `touch: cannot create file '${name}': File exists` };
+      if (
+        files.some((f) => f.name === name && !f.isFolder && f.parentId === null)
+      ) {
+        return {
+          type: "output",
+          content: `touch: cannot create file '${name}': File exists`,
+        };
       }
       return { type: "touch", name, parentId: null, content: "" };
     }
@@ -3091,14 +3121,19 @@ async function runCmd(
         return { type: "output", content: "rm: missing operand" };
       }
       const name = args[0];
-      const entry = files.find(f => f.name === name && f.parentId === null);
+      const entry = files.find((f) => f.name === name && f.parentId === null);
       if (!entry) {
-        return { type: "output", content: `rm: cannot remove '${name}': No such file or directory` };
+        return {
+          type: "output",
+          content: `rm: cannot remove '${name}': No such file or directory`,
+        };
       }
       const idsToDelete: string[] = [];
       const collect = (id: string) => {
         idsToDelete.push(id);
-        files.filter(f => f.parentId === id).forEach(child => collect(child.id));
+        files
+          .filter((f) => f.parentId === id)
+          .forEach((child) => collect(child.id));
       };
       collect(entry.id);
       return { type: "rm", ids: idsToDelete };
@@ -3109,14 +3144,25 @@ async function runCmd(
       }
       const src = args[0];
       const dest = args[1];
-      const srcFile = files.find(f => f.name === src && !f.isFolder && f.parentId === null);
+      const srcFile = files.find(
+        (f) => f.name === src && !f.isFolder && f.parentId === null,
+      );
       if (!srcFile) {
-        return { type: "output", content: `cp: cannot stat '${src}': No such file` };
+        return {
+          type: "output",
+          content: `cp: cannot stat '${src}': No such file`,
+        };
       }
-      if (files.some(f => f.name === dest && !f.isFolder && f.parentId === null)) {
-        return { type: "output", content: `cp: cannot create '${dest}': File exists` };
+      if (
+        files.some((f) => f.name === dest && !f.isFolder && f.parentId === null)
+      ) {
+        return {
+          type: "output",
+          content: `cp: cannot create '${dest}': File exists`,
+        };
       }
-      const content = fileContents[srcFile.name] || fileContents[srcFile.id] || "";
+      const content =
+        fileContents[srcFile.name] || fileContents[srcFile.id] || "";
       return { type: "touch", name: dest, parentId: null, content };
     }
     case "mv": {
@@ -3125,21 +3171,37 @@ async function runCmd(
       }
       const src = args[0];
       const dest = args[1];
-      const srcFile = files.find(f => f.name === src && !f.isFolder && f.parentId === null);
+      const srcFile = files.find(
+        (f) => f.name === src && !f.isFolder && f.parentId === null,
+      );
       if (!srcFile) {
-        return { type: "output", content: `mv: cannot stat '${src}': No such file` };
+        return {
+          type: "output",
+          content: `mv: cannot stat '${src}': No such file`,
+        };
       }
-      if (files.some(f => f.name === dest && !f.isFolder && f.parentId === null)) {
-        return { type: "output", content: `mv: cannot move to '${dest}': File exists` };
+      if (
+        files.some((f) => f.name === dest && !f.isFolder && f.parentId === null)
+      ) {
+        return {
+          type: "output",
+          content: `mv: cannot move to '${dest}': File exists`,
+        };
       }
-      const content = fileContents[srcFile.name] || fileContents[srcFile.id] || "";
+      const content =
+        fileContents[srcFile.name] || fileContents[srcFile.id] || "";
       const idsToDelete: string[] = [];
       const collect = (id: string) => {
         idsToDelete.push(id);
-        files.filter(f => f.parentId === id).forEach(child => collect(child.id));
+        files
+          .filter((f) => f.parentId === id)
+          .forEach((child) => collect(child.id));
       };
       collect(srcFile.id);
-      return { type: "output", content: "mv: Use 'cp' then 'rm' to move files" };
+      return {
+        type: "output",
+        content: "mv: Use 'cp' then 'rm' to move files",
+      };
     }
     case "npm": {
       const sub = args[0] || "";
@@ -3147,18 +3209,39 @@ async function runCmd(
       switch (sub) {
         case "install":
           if (rest.length === 0) {
-            return { type: "output", content: "added 123 packages in 2s\n\n123 packages are looking for funding\n  run `npm fund` for details" };
+            return {
+              type: "output",
+              content:
+                "added 123 packages in 2s\n\n123 packages are looking for funding\n  run `npm fund` for details",
+            };
           }
-          return { type: "output", content: `added ${rest.length} packages in 1s` };
+          return {
+            type: "output",
+            content: `added ${rest.length} packages in 1s`,
+          };
         case "start":
-          return { type: "output", content: "> project@1.0.0 start\n> node server.js\n\nServer running on http://localhost:3000" };
+          return {
+            type: "output",
+            content:
+              "> project@1.0.0 start\n> node server.js\n\nServer running on http://localhost:3000",
+          };
         case "run":
           if (rest[0] === "build") {
-            return { type: "output", content: "> project@1.0.0 build\n> tsc && vite build\n\n✓ built in 2.3s" };
+            return {
+              type: "output",
+              content:
+                "> project@1.0.0 build\n> tsc && vite build\n\n✓ built in 2.3s",
+            };
           }
-          return { type: "output", content: `Unknown npm run script: ${rest[0] || ""}` };
+          return {
+            type: "output",
+            content: `Unknown npm run script: ${rest[0] || ""}`,
+          };
         default:
-          return { type: "output", content: `npm: '${sub}' is not a known command. Try 'npm install', 'npm start', 'npm run build'.` };
+          return {
+            type: "output",
+            content: `npm: '${sub}' is not a known command. Try 'npm install', 'npm start', 'npm run build'.`,
+          };
       }
     }
     case "pip": {
@@ -3167,17 +3250,38 @@ async function runCmd(
       switch (sub) {
         case "install":
           if (rest.length === 0) {
-            return { type: "output", content: "Requirement already satisfied: pip in ./.venv/lib/python3.11/site-packages (22.3.1)" };
+            return {
+              type: "output",
+              content:
+                "Requirement already satisfied: pip in ./.venv/lib/python3.11/site-packages (22.3.1)",
+            };
           }
-          return { type: "output", content: rest.map(pkg =>
-            `Collecting ${pkg}\n  Downloading ${pkg}-1.0.0-py3-none-any.whl (10 kB)\nInstalling collected packages: ${pkg}\nSuccessfully installed ${pkg}-1.0.0`
-          ).join("\n") };
+          return {
+            type: "output",
+            content: rest
+              .map(
+                (pkg) =>
+                  `Collecting ${pkg}\n  Downloading ${pkg}-1.0.0-py3-none-any.whl (10 kB)\nInstalling collected packages: ${pkg}\nSuccessfully installed ${pkg}-1.0.0`,
+              )
+              .join("\n"),
+          };
         case "freeze":
-          return { type: "output", content: "certifi==2022.12.07\ncharset-normalizer==3.0.1\nidna==3.4\nrequests==2.28.2\nurllib3==1.26.14" };
+          return {
+            type: "output",
+            content:
+              "certifi==2022.12.07\ncharset-normalizer==3.0.1\nidna==3.4\nrequests==2.28.2\nurllib3==1.26.14",
+          };
         case "list":
-          return { type: "output", content: "Package    Version\n---------- -------\npip        22.3.1\nrequests   2.28.2\nsetuptools 65.5.0" };
+          return {
+            type: "output",
+            content:
+              "Package    Version\n---------- -------\npip        22.3.1\nrequests   2.28.2\nsetuptools 65.5.0",
+          };
         default:
-          return { type: "output", content: `pip: '${sub}' is not a known command. Try 'pip install', 'pip freeze'.` };
+          return {
+            type: "output",
+            content: `pip: '${sub}' is not a known command. Try 'pip install', 'pip freeze'.`,
+          };
       }
     }
     case "git": {
@@ -3185,45 +3289,78 @@ async function runCmd(
       const rest = args.slice(1);
       switch (sub) {
         case "status":
-          return { type: "output", content: "On branch main\nYour branch is up to date with 'origin/main'.\n\nnothing to commit, working tree clean" };
+          return {
+            type: "output",
+            content:
+              "On branch main\nYour branch is up to date with 'origin/main'.\n\nnothing to commit, working tree clean",
+          };
         case "add":
-          return { type: "output", content: rest.length ? `added ${rest.join(' ')}` : "Nothing specified, nothing added." };
+          return {
+            type: "output",
+            content: rest.length
+              ? `added ${rest.join(" ")}`
+              : "Nothing specified, nothing added.",
+          };
         case "commit":
           if (rest[0] === "-m") {
             const msg = rest.slice(1).join(" ");
-            return { type: "output", content: msg ? `[main abc1234] ${msg}\n 1 file changed, 1 insertion(+)` : "Aborting commit due to empty commit message." };
+            return {
+              type: "output",
+              content: msg
+                ? `[main abc1234] ${msg}\n 1 file changed, 1 insertion(+)`
+                : "Aborting commit due to empty commit message.",
+            };
           }
           return { type: "output", content: "git commit: missing -m message" };
         case "push":
           return { type: "output", content: "Everything up-to-date" };
         default:
-          return { type: "output", content: `git: '${sub}' is not a known command. Try 'git status', 'git add', 'git commit -m "msg"'.` };
+          return {
+            type: "output",
+            content: `git: '${sub}' is not a known command. Try 'git status', 'git add', 'git commit -m "msg"'.`,
+          };
       }
     }
     case "dotnet": {
       const sub = args[0] || "";
       switch (sub) {
         case "run":
-          return { type: "output", content: "Hello World!\n\nApplication finished." };
+          return {
+            type: "output",
+            content: "Hello World!\n\nApplication finished.",
+          };
         case "build":
-          return { type: "output", content: "MSBuild version 17.4.0 for .NET\n  Determining projects to restore...\n  All projects are up-to-date for restore.\n  YourApp -> /app/bin/Debug/net8.0/YourApp.dll\n\nBuild succeeded." };
+          return {
+            type: "output",
+            content:
+              "MSBuild version 17.4.0 for .NET\n  Determining projects to restore...\n  All projects are up-to-date for restore.\n  YourApp -> /app/bin/Debug/net8.0/YourApp.dll\n\nBuild succeeded.",
+          };
         default:
-          return { type: "output", content: `dotnet: '${sub}' is not a known command. Try 'dotnet run', 'dotnet build'.` };
+          return {
+            type: "output",
+            content: `dotnet: '${sub}' is not a known command. Try 'dotnet run', 'dotnet build'.`,
+          };
       }
     }
     case "csc": {
-      const file = args.find(a => a.endsWith(".cs"));
+      const file = args.find((a) => a.endsWith(".cs"));
       if (!file) {
         return { type: "output", content: "csc: no C# source file specified" };
       }
-      return { type: "output", content: `Microsoft (R) Visual C# Compiler version 4.8.0\n\n${file} compiled successfully.` };
+      return {
+        type: "output",
+        content: `Microsoft (R) Visual C# Compiler version 4.8.0\n\n${file} compiled successfully.`,
+      };
     }
     case "cs": {
-      const file = args.find(a => a.endsWith(".csx"));
+      const file = args.find((a) => a.endsWith(".csx"));
       if (!file) {
         return { type: "output", content: "cs: no C# script file specified" };
       }
-      return { type: "output", content: `Hello from C# script!\n${file} executed.` };
+      return {
+        type: "output",
+        content: `Hello from C# script!\n${file} executed.`,
+      };
     }
     case "exit":
       return { type: "exit" };
@@ -3386,8 +3523,14 @@ export default function VSCode({ onLaunchGame }: Props) {
       /getline\s*\(/i,
     ];
 
-    const hasInput = inputPatterns.some(pattern => pattern.test(code));
-    const isRunnable = !["html", "css", "json", "markdown", "plaintext"].includes(lang);
+    const hasInput = inputPatterns.some((pattern) => pattern.test(code));
+    const isRunnable = ![
+      "html",
+      "css",
+      "json",
+      "markdown",
+      "plaintext",
+    ].includes(lang);
     setStdinVisible(hasInput && isRunnable);
   }, [activeTab, files, fileContents]);
 
@@ -3415,7 +3558,7 @@ export default function VSCode({ onLaunchGame }: Props) {
       return;
     }
 
-    const oldFile = files.find(f => f.id === renamingId);
+    const oldFile = files.find((f) => f.id === renamingId);
     const oldName = oldFile?.name;
 
     setFiles((fs) =>
@@ -3440,9 +3583,7 @@ export default function VSCode({ onLaunchGame }: Props) {
         return newC;
       });
 
-      setOpenTabs((tabs) => 
-        tabs.map(t => t === renamingId ? name : t)
-      );
+      setOpenTabs((tabs) => tabs.map((t) => (t === renamingId ? name : t)));
 
       if (activeTab === renamingId) {
         setActiveTab(name);
@@ -3881,7 +4022,8 @@ export default function VSCode({ onLaunchGame }: Props) {
       if (val === "e1.12.2 u3") {
         onLaunchGame("1.12.2_u3");
         return;
-      }handleDragEnd
+      }
+      handleDragEnd;
     }
   };
 
@@ -4110,7 +4252,7 @@ export default function VSCode({ onLaunchGame }: Props) {
   // ─── Keyboard shortcut for Ctrl+C to stop execution ──────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === 'c') {
+      if (e.ctrlKey && e.key === "c") {
         // Only stop if there's something running
         if (terminalRunning) {
           e.preventDefault();
@@ -4128,7 +4270,7 @@ export default function VSCode({ onLaunchGame }: Props) {
                     "Execution stopped by user (Ctrl+C)",
                   ],
                 };
-              })
+              }),
             );
             setTerminalRunning(false);
           }
@@ -4173,9 +4315,27 @@ export default function VSCode({ onLaunchGame }: Props) {
     if (e.key === "Tab") {
       e.preventDefault();
       const cmds = [
-        "ls", "pwd", "cd", "echo", "cat", "mkdir", "touch",
-        "rm", "cp", "mv", "date", "whoami", "node", "python", "python3",
-        "go", "npm", "git", "clear", "help", "run"
+        "ls",
+        "pwd",
+        "cd",
+        "echo",
+        "cat",
+        "mkdir",
+        "touch",
+        "rm",
+        "cp",
+        "mv",
+        "date",
+        "whoami",
+        "node",
+        "python",
+        "python3",
+        "go",
+        "npm",
+        "git",
+        "clear",
+        "help",
+        "run",
       ];
       const m = cmds.find((c) => c.startsWith(termInput) && c !== termInput);
       if (m) {
@@ -4195,13 +4355,9 @@ export default function VSCode({ onLaunchGame }: Props) {
               if (s.id !== activeTermId) return s;
               return {
                 ...s,
-                lines: [
-                  ...s.lines,
-                  "^C",
-                  "Execution stopped by user (Ctrl+C)",
-                ],
+                lines: [...s.lines, "^C", "Execution stopped by user (Ctrl+C)"],
               };
-            })
+            }),
           );
           setTerminalRunning(false);
         }
@@ -4229,13 +4385,10 @@ export default function VSCode({ onLaunchGame }: Props) {
           s.id === sessionId
             ? {
                 ...s,
-                lines: [
-                  ...s.lines,
-                  `\x02${CWD}\x03${input}`,
-                ],
+                lines: [...s.lines, `\x02${CWD}\x03${input}`],
               }
             : s,
-        )
+        ),
       );
 
       setTermHistories((h) => ({
@@ -4264,17 +4417,21 @@ export default function VSCode({ onLaunchGame }: Props) {
           ss.map((s) => {
             if (s.id !== sessionId) return s;
             const lines = [...s.lines];
-            const parts = toSend.split('\n');
+            const parts = toSend.split("\n");
             for (let i = 0; i < parts.length; i++) {
               const part = parts[i];
-              if (i === 0 && lines.length > 0 && !lines[lines.length - 1].startsWith('\x02')) {
+              if (
+                i === 0 &&
+                lines.length > 0 &&
+                !lines[lines.length - 1].startsWith("\x02")
+              ) {
                 lines[lines.length - 1] = lines[lines.length - 1] + part;
               } else if (part || i < parts.length - 1) {
-                lines.push(part || '');
+                lines.push(part || "");
               }
             }
             return { ...s, lines };
-          })
+          }),
         );
       };
 
@@ -4306,14 +4463,21 @@ export default function VSCode({ onLaunchGame }: Props) {
         let result: TerminalResult | string;
 
         // Handle run commands with streaming
-        if (cmd === "run" || cmd === "python" || cmd === "python3" || 
-            cmd === "node" || cmd === "tsx" || cmd === "go" || 
-            cmd === "rustc" || cmd === "ruby" || cmd === "php") {
-
+        if (
+          cmd === "run" ||
+          cmd === "python" ||
+          cmd === "python3" ||
+          cmd === "node" ||
+          cmd === "tsx" ||
+          cmd === "go" ||
+          cmd === "rustc" ||
+          cmd === "ruby" ||
+          cmd === "php"
+        ) {
           // Find the file
           let fileName = args[0];
           if (!fileName && activeTab) {
-            const f = files.find(x => x.id === activeTab);
+            const f = files.find((x) => x.id === activeTab);
             if (f) fileName = f.name;
           }
 
@@ -4324,28 +4488,46 @@ export default function VSCode({ onLaunchGame }: Props) {
             if (!f) {
               result = `${fileName}: No such file`;
             } else {
-              const code = fileContentsRef.current[f.id] ?? fileContentsRef.current[f.name] ?? "";
+              const code =
+                fileContentsRef.current[f.id] ??
+                fileContentsRef.current[f.name] ??
+                "";
               if (!code.trim()) {
                 result = `${f.name} is empty.`;
               } else {
-                const language = cmd === "python" || cmd === "python3" ? "python" :
-                               cmd === "node" ? "javascript" :
-                               cmd === "tsx" ? "typescript" :
-                               cmd === "go" ? "go" :
-                               cmd === "rustc" ? "rust" :
-                               cmd === "ruby" ? "ruby" :
-                               cmd === "php" ? "php" :
-                               languageFromFileName(f.name);
+                const language =
+                  cmd === "python" || cmd === "python3"
+                    ? "python"
+                    : cmd === "node"
+                      ? "javascript"
+                      : cmd === "tsx"
+                        ? "typescript"
+                        : cmd === "go"
+                          ? "go"
+                          : cmd === "rustc"
+                            ? "rust"
+                            : cmd === "ruby"
+                              ? "ruby"
+                              : cmd === "php"
+                                ? "php"
+                                : languageFromFileName(f.name);
 
-                if (["html", "css", "json", "markdown", "plaintext"].includes(language)) {
+                if (
+                  ["html", "css", "json", "markdown", "plaintext"].includes(
+                    language,
+                  )
+                ) {
                   result = `${f.name} is not a runnable program file.`;
                 } else {
-                  const output = await executeOnlineWithAbort({
-                    language,
-                    filename: f.name,
-                    code,
-                    stdin: stdinContent,
-                  }, streamOutput);
+                  const output = await executeOnlineWithAbort(
+                    {
+                      language,
+                      filename: f.name,
+                      code,
+                      stdin: stdinContent,
+                    },
+                    streamOutput,
+                  );
 
                   // Flush remaining output
                   if (updateTimeout) {
@@ -4366,24 +4548,24 @@ export default function VSCode({ onLaunchGame }: Props) {
             files,
             fileContentsRef.current,
             activeTab,
-            stdinContent
+            stdinContent,
           );
           result = cmdResult;
         }
 
         // Handle the result
-        if (typeof result === 'string') {
+        if (typeof result === "string") {
           if (result) {
             setTermSessions((ss) =>
               ss.map((s) => {
                 if (s.id !== sessionId) return s;
                 const lines = [...s.lines];
-                const resultLines = result.split('\n');
+                const resultLines = result.split("\n");
                 for (const line of resultLines) {
                   if (line) lines.push(line);
                 }
                 return { ...s, lines };
-              })
+              }),
             );
           }
         } else {
@@ -4393,7 +4575,7 @@ export default function VSCode({ onLaunchGame }: Props) {
                 ss.map((s) => {
                   if (s.id !== sessionId) return s;
                   return { ...s, lines: [] };
-                })
+                }),
               );
               break;
 
@@ -4403,12 +4585,12 @@ export default function VSCode({ onLaunchGame }: Props) {
                   ss.map((s) => {
                     if (s.id !== sessionId) return s;
                     const lines = [...s.lines];
-                    const resultLines = result.content.split('\n');
+                    const resultLines = result.content.split("\n");
                     for (const line of resultLines) {
                       if (line) lines.push(line);
                     }
                     return { ...s, lines };
-                  })
+                  }),
                 );
               }
               break;
@@ -4427,7 +4609,9 @@ export default function VSCode({ onLaunchGame }: Props) {
             }
 
             case "touch": {
-              const ext = result.name.includes(".") ? result.name.split(".").pop() : undefined;
+              const ext = result.name.includes(".")
+                ? result.name.split(".").pop()
+                : undefined;
               const newEntry: FileEntry = {
                 id: `file-${Date.now()}`,
                 name: result.name,
@@ -4438,10 +4622,10 @@ export default function VSCode({ onLaunchGame }: Props) {
                 ext: ext,
               };
               setFiles((prev) => [...prev, newEntry]);
-              setFileContents((prev) => ({ 
-                ...prev, 
+              setFileContents((prev) => ({
+                ...prev,
                 [result.name]: result.content || "",
-                [newEntry.id]: result.content || ""
+                [newEntry.id]: result.content || "",
               }));
               setTimeout(() => openFile(newEntry.id), 50);
               break;
@@ -4480,18 +4664,16 @@ export default function VSCode({ onLaunchGame }: Props) {
           }
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown execution error";
+        const message =
+          error instanceof Error ? error.message : "Unknown execution error";
         setTermSessions((ss) =>
           ss.map((s) => {
             if (s.id !== sessionId) return s;
             return {
               ...s,
-              lines: [
-                ...s.lines,
-                `Error: ${message}`,
-              ],
+              lines: [...s.lines, `Error: ${message}`],
             };
-          })
+          }),
         );
       } finally {
         setTerminalRunning(false);
@@ -4573,7 +4755,7 @@ export default function VSCode({ onLaunchGame }: Props) {
     if (targetEntry.isFolder) {
       let current = targetEntry.parentId;
       while (current) {
-        const parent = files.find(f => f.id === current);
+        const parent = files.find((f) => f.id === current);
         if (parent?.id === draggedItem.id) {
           setDraggedItem(null);
           return;
@@ -4581,30 +4763,32 @@ export default function VSCode({ onLaunchGame }: Props) {
         current = parent?.parentId || null;
       }
 
-      setFiles(prev => 
-        prev.map(f => {
+      setFiles((prev) =>
+        prev.map((f) => {
           if (f.id === draggedItem.id) {
             const depth = targetEntry.depth + 1;
             return { ...f, parentId: targetEntry.id, depth };
           }
           return f;
-        })
+        }),
       );
 
-      setExpanded(prev => ({ ...prev, [targetEntry.id]: true }));
+      setExpanded((prev) => ({ ...prev, [targetEntry.id]: true }));
     } else {
       const targetParent = targetEntry.parentId;
-      const draggedIndex = files.findIndex(f => f.id === draggedItem.id);
-      const targetIndex = files.findIndex(f => f.id === targetEntry.id);
+      const draggedIndex = files.findIndex((f) => f.id === draggedItem.id);
+      const targetIndex = files.findIndex((f) => f.id === targetEntry.id);
 
       if (draggedIndex === -1 || targetIndex === -1) return;
 
       if (files[draggedIndex].parentId !== targetParent) return;
 
-      setFiles(prev => {
+      setFiles((prev) => {
         const newFiles = [...prev];
         const [removed] = newFiles.splice(draggedIndex, 1);
-        const newTargetIndex = newFiles.findIndex(f => f.id === targetEntry.id);
+        const newTargetIndex = newFiles.findIndex(
+          (f) => f.id === targetEntry.id,
+        );
         newFiles.splice(newTargetIndex, 0, removed);
         return newFiles;
       });
@@ -5058,14 +5242,16 @@ export default function VSCode({ onLaunchGame }: Props) {
                           height: "22px",
                           cursor: "pointer",
                           background:
-                            selectedFile === f.id 
-                              ? "#094771" 
-                              : isDragOver 
-                                ? "#2a4d6a" 
+                            selectedFile === f.id
+                              ? "#094771"
+                              : isDragOver
+                                ? "#2a4d6a"
                                 : "transparent",
                           userSelect: "none",
                           borderTop: isDragOver ? "2px solid #007acc" : "none",
-                          borderBottom: isDragOver ? "2px solid #007acc" : "none",
+                          borderBottom: isDragOver
+                            ? "2px solid #007acc"
+                            : "none",
                           borderRadius: isDragOver ? "2px" : "0",
                         }}
                         onMouseEnter={(e) => {
@@ -5854,7 +6040,7 @@ export default function VSCode({ onLaunchGame }: Props) {
                                 ],
                               }
                             : s,
-                        )
+                        ),
                       );
                       setTermHistories((h) => ({
                         ...h,
@@ -5869,31 +6055,42 @@ export default function VSCode({ onLaunchGame }: Props) {
                           ss.map((s) => {
                             if (s.id !== sessionId) return s;
                             const lines = [...s.lines];
-                            const parts = chunk.split('\n');
+                            const parts = chunk.split("\n");
                             for (let i = 0; i < parts.length; i++) {
                               const part = parts[i];
-                              if (i === 0 && lines.length > 0 && !lines[lines.length - 1].startsWith('\x02')) {
-                                lines[lines.length - 1] = lines[lines.length - 1] + part;
+                              if (
+                                i === 0 &&
+                                lines.length > 0 &&
+                                !lines[lines.length - 1].startsWith("\x02")
+                              ) {
+                                lines[lines.length - 1] =
+                                  lines[lines.length - 1] + part;
                               } else if (part || i < parts.length - 1) {
-                                lines.push(part || '');
+                                lines.push(part || "");
                               }
                             }
                             return { ...s, lines };
-                          })
+                          }),
                         );
                       };
 
                       const fileName = activeFile.name;
                       const f = findFileHelper(files, fileName, activeTab);
                       if (f) {
-                        const code = fileContentsRef.current[f.id] ?? fileContentsRef.current[f.name] ?? "";
+                        const code =
+                          fileContentsRef.current[f.id] ??
+                          fileContentsRef.current[f.name] ??
+                          "";
                         const language = languageFromFileName(f.name);
-                        executeOnlineWithAbort({
-                          language,
-                          filename: f.name,
-                          code,
-                          stdin: stdinContent,
-                        }, streamOutput).then((result) => {
+                        executeOnlineWithAbort(
+                          {
+                            language,
+                            filename: f.name,
+                            code,
+                            stdin: stdinContent,
+                          },
+                          streamOutput,
+                        ).then((result) => {
                           setTermSessions((ss) =>
                             ss.map((s) => {
                               if (s.id !== sessionId) return s;
@@ -5907,7 +6104,7 @@ export default function VSCode({ onLaunchGame }: Props) {
                                   ...(result ? result.split("\n") : []),
                                 ],
                               };
-                            })
+                            }),
                           );
                           setTerminalRunning(false);
                         });
@@ -6650,7 +6847,13 @@ export default function VSCode({ onLaunchGame }: Props) {
                           maxWidth: "260px",
                         }}
                       >
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
                           <span
                             style={{
                               fontSize: "9px",
@@ -6685,8 +6888,7 @@ export default function VSCode({ onLaunchGame }: Props) {
                             outline: "none",
                             color: "#d4d4d4",
                             fontSize: "12px",
-                            fontFamily:
-                              "'Cascadia Code','Fira Code',monospace",
+                            fontFamily: "'Cascadia Code','Fira Code',monospace",
                             resize: "vertical",
                             minHeight: "30px",
                             maxHeight: "100px",
@@ -7124,14 +7326,9 @@ export default function VSCode({ onLaunchGame }: Props) {
                       codeforge@workspace
                     </span>
 
-                    <span style={{ color: "#858585" }}>
-                      {" "}
-                      {CWD}{" "}
-                    </span>
+                    <span style={{ color: "#858585" }}> {CWD} </span>
 
-                    <span style={{ color: "#cccccc" }}>
-                      %{" "}
-                    </span>
+                    <span style={{ color: "#cccccc" }}>% </span>
 
                     <input
                       ref={termInputRef}
@@ -7624,13 +7821,9 @@ const markdownCompiler = new Marked(
       };
 
       const requestedLanguage = language.trim().toLowerCase();
-      const resolvedLanguage =
-        aliases[requestedLanguage] ?? requestedLanguage;
+      const resolvedLanguage = aliases[requestedLanguage] ?? requestedLanguage;
 
-      if (
-        resolvedLanguage &&
-        hljs.getLanguage(resolvedLanguage)
-      ) {
+      if (resolvedLanguage && hljs.getLanguage(resolvedLanguage)) {
         return hljs.highlight(code, {
           language: resolvedLanguage,
           ignoreIllegals: true,
@@ -7639,7 +7832,7 @@ const markdownCompiler = new Marked(
 
       return hljs.highlightAuto(code).value;
     },
-  })
+  }),
 );
 
 markdownCompiler.setOptions({
