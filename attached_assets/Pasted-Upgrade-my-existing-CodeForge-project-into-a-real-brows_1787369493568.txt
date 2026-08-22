@@ -1,0 +1,155 @@
+Upgrade my existing CodeForge project into a real browser-based development environment similar to GitHub Codespaces. **Do not redesign or replace my existing UI. Extend the current project.**
+
+### 1. Real persistent workspace
+
+Create a backend workspace for each user/session instead of temporary folders.
+
+* Each workspace must have a persistent filesystem directory.
+* Files created in the CodeForge file explorer must exist on the backend.
+* Support create, read, edit, rename, delete, move and save files/folders.
+* Keep the workspace alive between terminal commands and code execution.
+* Prevent users from accessing files outside their own workspace.
+
+### 2. Real interactive terminal
+
+Replace the current fake/non-persistent terminal behavior with a real PTY terminal.
+
+Use a proper PTY library such as `node-pty` and WebSockets.
+
+The terminal must support:
+
+* `cd`
+* `ls`
+* `pwd`
+* `mkdir`
+* `rm`
+* `cp`
+* `mv`
+* `cat`
+* `clear`
+* `python`
+* `python3`
+* `pip`
+* `npm`
+* `node`
+* `npx`
+* `git`
+* compilers/interpreters installed on the Replit environment
+
+It must support interactive programs such as:
+
+```text
+python3
+>>> input(...)
+```
+
+and programs that continuously print/update output.
+
+Support Ctrl+C, Ctrl+D, arrow keys, Backspace, Tab completion where available, terminal resize, ANSI colors and multiple terminal sessions.
+
+The terminal must actually execute commands on the backend rather than simulating output.
+
+### 3. Python virtual environments
+
+Add real Python virtual-environment support inside each workspace.
+
+For example:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install requests
+python main.py
+```
+
+Packages installed by the user must remain available in that workspace.
+
+Automatically detect `.venv` and make the terminal/editor aware of the selected Python interpreter.
+
+### 4. Code execution
+
+Stop relying on Judge0 for normal CodeForge execution.
+
+Run code inside the user's persistent workspace so:
+
+```bash
+python main.py
+node main.js
+g++ main.cpp -o main && ./main
+javac Main.java && java Main
+```
+
+actually use the same filesystem and installed packages as the terminal.
+
+Keep the existing Run button, but connect it to this backend execution system.
+
+### 5. Extensions
+
+Implement an extension system similar to VS Code/Codespaces.
+
+Create an Extensions panel where users can:
+
+* search extensions
+* install/uninstall extensions
+* enable/disable extensions
+* see installed extensions
+* persist extensions per workspace/user
+
+Use the VS Code extension format where practical. Do **not** fake installation with UI-only entries. At minimum support real language tooling/extensions that can integrate with Monaco.
+
+### 6. Editor integration
+
+Connect the existing Monaco/editor and file explorer to the backend workspace.
+
+Changes made in the editor must save to the actual workspace filesystem, and terminal changes must immediately appear in the file explorer.
+
+Add:
+
+* file watching
+* autosave
+* terminal/editor synchronization
+* multiple terminal tabs
+* terminal working directory persistence
+
+### 7. Security
+
+Because this executes shell commands, implement strong isolation.
+
+* Never expose the host filesystem.
+* Restrict every terminal to its workspace.
+* Sanitize paths.
+* Prevent `../` traversal.
+* Apply CPU, memory, process and disk limits where possible.
+* Kill orphaned processes when a workspace is destroyed.
+* Do not expose server environment variables/secrets to users.
+
+### 8. Replit deployment
+
+Make the implementation actually work on Replit production, not only localhost.
+
+Update package.json, backend routes, WebSocket handling and dependencies as required.
+
+Use the existing `artifacts/api-server` backend instead of creating an unrelated server.
+
+### 9. Important requirement
+
+Do not create mock terminal output, fake virtual environments, fake extension installs or simulated filesystems.
+
+Everything must be backed by real backend processes/files.
+
+After implementation, test the following end-to-end:
+
+```bash
+mkdir test
+cd test
+python3 -m venv .venv
+source .venv/bin/activate
+pip install requests
+python -c "import requests; print(requests.__version__)"
+echo hello > test.txt
+cat test.txt
+```
+
+Also verify an interactive Python program using `input()` works through the terminal.
+
+Fix all errors you encounter and make the existing CodeForge features continue working.
