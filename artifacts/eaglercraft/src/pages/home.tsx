@@ -3789,6 +3789,7 @@ export default function VSCode({ onLaunchGame }: Props) {
           ext,
           isFolder: false,
           parentId: null,
+          depth: 0,
           lang: ext ? langMap[ext] : "plaintext",
         };
         setFiles((fs) => [...fs, newEntry]);
