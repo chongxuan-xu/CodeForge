@@ -33,6 +33,7 @@ async function buildAll() {
       "better-sqlite3",
       "sqlite3",
       "canvas",
+      "node-pty",
       "bcrypt",
       "argon2",
       "fsevents",

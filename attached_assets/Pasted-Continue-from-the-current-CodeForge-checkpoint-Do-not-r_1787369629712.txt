@@ -1,0 +1,137 @@
+Continue from the current CodeForge checkpoint. **Do not redo the completed Vite/security work and do not redesign the existing UI.** Implement the actual Codespaces-style development environment now.
+
+Complete these three areas **in this order**:
+
+### 1. Persistent per-user workspaces
+
+Create a real backend workspace for every user/session.
+
+* Store the workspace on the server filesystem.
+* Files and folders must persist between runs and sessions.
+* Existing CodeForge file explorer must read/write this real filesystem.
+* Support create, edit, save, rename, delete, move files and folders.
+* Prevent `../` path traversal and access outside the workspace.
+* Add workspace initialization automatically.
+* Existing projects/files must continue working.
+
+### 2. Real interactive terminal
+
+Replace any simulated terminal behavior with a genuine PTY.
+
+Use `node-pty` + WebSocket.
+
+The terminal must execute real commands in the user's workspace and preserve its current working directory.
+
+It must support:
+
+* interactive commands
+* `cd`, `ls`, `pwd`, `mkdir`, `rm`, `cp`, `mv`, `cat`
+* `python3`
+* `python3 -m venv .venv`
+* `source .venv/bin/activate`
+* `pip install`
+* `node`, `npm`, `npx`
+* `git`
+* available system compilers/interpreters
+
+It must correctly support:
+
+* `input()`
+* Ctrl+C
+* Ctrl+D
+* Ctrl+L
+* arrow keys
+* Backspace
+* Tab
+* ANSI colors
+* continuous output
+* interactive programs
+* terminal resizing
+* multiple terminal sessions/tabs
+
+Example that must genuinely work:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install requests
+python3
+```
+
+Then:
+
+```python
+name = input("Name: ")
+print("Hello", name)
+```
+
+### 3. Synchronize the entire IDE
+
+Connect the existing:
+
+**File Explorer ↔ Monaco Editor ↔ Terminal ↔ Run system**
+
+to the same persistent workspace.
+
+Changes made in the editor must immediately save to the backend filesystem.
+
+Changes made from the terminal must appear in the file explorer.
+
+The existing Run button must execute code from the same workspace and use installed dependencies/virtual environments instead of an isolated temporary environment.
+
+Support at minimum:
+
+```bash
+python3 main.py
+node main.js
+g++ main.cpp -o main && ./main
+javac Main.java && java Main
+```
+
+### Security
+
+Because this executes real shell commands:
+
+* Never expose the host filesystem.
+* Restrict every command to the user's workspace.
+* Block path traversal.
+* Do not expose server secrets/environment variables.
+* Add reasonable CPU, memory, process and disk limits.
+* Clean up orphaned processes.
+* Do not use fake terminal output or mock filesystem data.
+
+### Replit requirements
+
+Make this work in the **published Replit deployment**, not only localhost.
+
+Update dependencies, backend routes and WebSocket handling as necessary.
+
+Use the current CodeForge backend architecture instead of creating a completely separate application.
+
+### Verification
+
+Do not mark this complete until this exact sequence works through the CodeForge terminal:
+
+```bash
+mkdir test
+cd test
+python3 -m venv .venv
+source .venv/bin/activate
+pip install requests
+python3 -c "import requests; print(requests.__version__)"
+echo hello > test.txt
+cat test.txt
+```
+
+Then verify an interactive Python `input()` program works.
+
+Finally verify:
+
+1. Refreshing the page does not lose workspace files.
+2. Terminal-created files appear in Explorer.
+3. Editor-created files appear in the terminal.
+4. Installed Python packages remain available.
+5. Multiple terminal sessions work.
+6. Existing CodeForge functionality still works.
+
+**Do not stop after creating the UI. This task is only complete when the backend, filesystem, PTY, WebSocket connection, editor synchronization and execution are actually functional.**
